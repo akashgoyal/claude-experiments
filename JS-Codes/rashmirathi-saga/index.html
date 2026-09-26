@@ -1394,15 +1394,21 @@ const bar = document.getElementById('bar'), fill = document.getElementById('fill
 let state = 'idle', musicMuted = false, posterT = 3.2, frozenT = 0, fallbackStart = 0, lastCueT = 0;
 
 let schedIdx = 0;
+// The film runs on its own clock; each sound is placed on the audio clock shortly before it is due,
+// so a browser that is slow (or refuses) to start audio never freezes the picture.
 function scheduleAhead(T) {
-  if (!AC) return;
-  while (schedIdx < SCORE.length && SCORE[schedIdx].t < T + 2.5) { const ev = SCORE[schedIdx++]; if (ev.t >= T - .1) ev.fn(t0 + ev.t); }
+  if (!AC || AC.state !== 'running') return;
+  const now = AC.currentTime;
+  while (schedIdx < SCORE.length && SCORE[schedIdx].t < T + 1.5) {
+    const ev = SCORE[schedIdx++];
+    if (ev.t >= T - .1) ev.fn(now + .05 + Math.max(0, ev.t - T));
+  }
 }
 function currentT() {
   if (state === 'idle') return posterT;
   if (state === 'ended') return DUR;
   if (state === 'paused') return frozenT;
-  return AC ? AC.currentTime - t0 : (performance.now() / 1000 - fallbackStart);
+  return performance.now() / 1000 - fallbackStart;
 }
 function play(from = 0) {
   from = clamp(from, 0, DUR - .05);
@@ -1410,11 +1416,10 @@ function play(from = 0) {
   if (hasTTS) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }
   if (AC) { try { AC.close(); } catch (e) {} AC = null; }
   if (audioInit()) {
-    t0 = AC.currentTime + .1 - from;
     schedIdx = SCORE.findIndex(ev => ev.t >= from - .02); if (schedIdx < 0) schedIdx = SCORE.length;
-    scheduleAhead(from);
     if (AC.state === 'suspended') AC.resume();
-  } else fallbackStart = performance.now() / 1000 - from;
+  }
+  fallbackStart = performance.now() / 1000 - from;
   lastCueT = from - .3;
   state = 'playing'; ov.hidden = true; pp.textContent = 'Pause';
 }
@@ -1425,7 +1430,8 @@ function pause() {
 }
 function resume() {
   if (state !== 'paused') return;
-  if (AC) AC.resume(); else fallbackStart = performance.now() / 1000 - frozenT;
+  if (AC) AC.resume();
+  fallbackStart = performance.now() / 1000 - frozenT;
   state = 'playing'; pp.textContent = 'Pause';
 }
 function toggle() {
