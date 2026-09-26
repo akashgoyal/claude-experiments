@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mitthu's Varnmala</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Yatra+One&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --desk: #c9955f;
+    --desk-deep: #a8733f;
+    --ink: #2b2a33;
+    --paper: #f7efdf;
+    --vermilion: #d9432b;
+    --marigold: #f28c28;
+    --teal: #1f8a8a;
+  }
+  html, body { height: auto; }
+  body {
+    margin: 0;
+    background: radial-gradient(ellipse at 50% 15%, #d6a36c 0%, var(--desk) 55%, var(--desk-deep) 100%) fixed, var(--desk);
+    color: var(--ink);
+    font-family: "Kalam", "Noto Sans Devanagari", "Comic Sans MS", cursive;
+    padding-block: 22px 40px;
+    padding-inline: 16px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 16px; }
+  h1 { margin: 0; font-family: "Yatra One", "Kalam", serif; font-weight: 400; font-size: clamp(26px, 4vw, 40px); line-height: 1.15; text-wrap: balance; }
+  .sub { margin: 0; font-size: 16px; }
+  .stage {
+    position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9;
+    background: #b9844f; border-radius: 3px; overflow: hidden;
+    box-shadow: 0 14px 34px rgba(60, 30, 5, .4), 0 2px 0 rgba(60, 30, 5, .25);
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+  .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(43, 42, 51, .16); }
+  .bigplay {
+    font: 700 clamp(18px, 3.2vw, 30px) "Kalam", cursive;
+    color: #fffaf0; background: var(--vermilion); border: 0; cursor: pointer;
+    padding: .4em 1.1em .45em; transform: rotate(-2.5deg);
+    box-shadow: 4px 5px 0 rgba(43, 42, 51, .35);
+    clip-path: polygon(0 6%, 4% 0, 30% 4%, 58% 0, 86% 5%, 100% 0, 98% 48%, 100% 94%, 72% 100%, 44% 96%, 16% 100%, 1% 95%, 3% 50%);
+    transition: transform .15s ease;
+  }
+  .bigplay:hover { transform: rotate(-1deg) scale(1.04); }
+  .bigplay:focus-visible, .ctl:focus-visible, .bar:focus-visible { outline: 3px dashed var(--ink); outline-offset: 4px; }
+  .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; }
+  .ctl {
+    font: 700 17px "Kalam", cursive; color: var(--ink); background: var(--paper);
+    border: 2px solid var(--ink); border-radius: 3px; padding: 2px 13px 3px; cursor: pointer;
+    box-shadow: 2px 3px 0 var(--ink);
+  }
+  .ctl:nth-child(odd) { transform: rotate(-1.2deg); }
+  .ctl:nth-child(even) { transform: rotate(1deg); }
+  .ctl:active { box-shadow: 0 1px 0 var(--ink); translate: 1px 2px; }
+  .bar { flex: 1 1 160px; height: 12px; position: relative; cursor: pointer; background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; overflow: hidden; }
+  .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: repeating-linear-gradient(-45deg, var(--marigold) 0 6px, #d9761a 6px 12px); }
+  .time { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 9ch; text-align: right; }
+  .note { margin: 0; font-size: 15px; max-width: 70ch; }
+  @media (max-width: 520px) { .time { min-width: 0; } .ctl { font-size: 15px; padding-inline: 9px; } }
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <header>
+    <h1>हिंदी वर्णमाला · Hindi Varnmala</h1>
+    <p class="sub">A 90-second paper film of all 13 swar and 37 vyanjan. Turn your sound on.</p>
+  </header>
+  <div class="stage">
+    <canvas id="cv" role="img" aria-label="Hand-drawn paper collage animation teaching the Hindi alphabet: 13 vowels (swar) with picture words, then 37 consonants (vyanjan) by group, with Mitthu the parrot."></canvas>
+    <div class="overlay" id="ov"><button class="bigplay" id="big">&#9654; Play with sound</button></div>
+  </div>
+  <div class="controls">
+    <button class="ctl" id="pp">Play</button>
+    <button class="ctl" id="rs">Restart</button>
+    <button class="ctl" id="mu" aria-pressed="false">Mute music</button>
+    <button class="ctl" id="vo" aria-pressed="true">Voice on</button>
+    <div class="bar" id="bar" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="90" aria-valuenow="0"><div class="fill" id="fill"></div></div>
+    <span class="time" id="tm">0:00 / 1:30</span>
+  </div>
+  <p class="note" id="vnote">Letters are read aloud by your browser's Hindi voice.</p>
+</main>
+
+<script>
+(() => {
+'use strict';
+const W = 1280, H = 720, DUR = 90, TAU = Math.PI * 2;
+const FD = '"Yatra One", "Kalam", "Noto Sans Devanagari", serif';
+const FK = '"Kalam", "Noto Sans Devanagari", cursive';
+const C = {
+  ink: '#2b2a33', pen: '#6b6270', vermilion: '#d9432b', marigold: '#f28c28', turmeric: '#f2b134',
+  teal: '#1f8a8a', indigo: '#3b4a8f', pink: '#e0607e', leaf: '#4f9a3c', leaf2: '#2f7d4f',
+  brown: '#8a5a33', cream: '#fffaf0', parrot: '#57b847', red: '#d9432b', sky: '#8ecae6'
+};
+const cv = document.getElementById('cv');
+const cx = cv.getContext('2d');
+
+/* ---------- data ---------- */
+// letter, sound, word, word in latin, meaning, doodle
+const SWAR = [
+  ['अ', 'a', 'अनार', 'anaar', 'pomegranate', 'pom'],
+  ['आ', 'aa', 'आम', 'aam', 'mango', 'mango'],
+  ['इ', 'i', 'इमली', 'imli', 'tamarind', 'tamarind'],
+  ['ई', 'ee', 'ईख', 'eekh', 'sugarcane', 'cane'],
+  ['उ', 'u', 'उल्लू', 'ullu', 'owl', 'owl'],
+  ['ऊ', 'oo', 'ऊन', 'oon', 'wool', 'wool'],
+  ['ऋ', 'ri', 'ऋषि', 'rishi', 'sage', 'sage'],
+  ['ए', 'e', 'एक', 'ek', 'one', 'one'],
+  ['ऐ', 'ai', 'ऐनक', 'ainak', 'spectacles', 'glasses'],
+  ['ओ', 'o', 'ओखली', 'okhli', 'mortar', 'mortar'],
+  ['औ', 'au', 'औज़ार', 'auzaar', 'tools', 'hammer'],
+  ['अं', 'an', 'अंगूर', 'angoor', 'grapes', 'grapes'],
+  ['अः', 'ah', 'प्रातः', 'praatah', 'morning', 'sunrise']
+].map(([l, tr, w, wt, en, d], i) => ({ l, tr, w, wt, en, d, i, say: i === 12 ? 'अः, प्रातः' : `${l} से ${w}`, note: i === 12 ? 'ends with अः' : '' }));
+
+const ROWS = [
+  { g: 'क-वर्ग', gl: 'ka-varg · throat', l: [['क', 'ka', 'कमल', 'kamal', 'lotus'], ['ख', 'kha', 'खरगोश', 'khargosh', 'rabbit'], ['ग', 'ga', 'गमला', 'gamla', 'flower pot'], ['घ', 'gha', 'घर', 'ghar', 'house'], ['ङ', 'nga', 'अङ्ग', 'ang', 'limb', 1]] },
+  { g: 'च-वर्ग', gl: 'cha-varg · palate', l: [['च', 'cha', 'चम्मच', 'chammach', 'spoon'], ['छ', 'chha', 'छतरी', 'chhatri', 'umbrella'], ['ज', 'ja', 'जहाज़', 'jahaaz', 'ship'], ['झ', 'jha', 'झंडा', 'jhanda', 'flag'], ['ञ', 'nya', 'चञ्चल', 'chanchal', 'playful', 1]] },
+  { g: 'ट-वर्ग', gl: 'Ta-varg · roof', l: [['ट', 'Ta', 'टमाटर', 'tamaatar', 'tomato'], ['ठ', 'Tha', 'ठेला', 'thela', 'handcart'], ['ड', 'Da', 'डमरू', 'damroo', 'small drum'], ['ढ', 'Dha', 'ढोल', 'dhol', 'drum'], ['ण', 'Na', 'बाण', 'baan', 'arrow', 1]] },
+  { g: 'त-वर्ग', gl: 'ta-varg · teeth', l: [['त', 'ta', 'तरबूज़', 'tarbooz', 'watermelon'], ['थ', 'tha', 'थाली', 'thaali', 'plate'], ['द', 'da', 'दवात', 'davaat', 'inkpot'], ['ध', 'dha', 'धनुष', 'dhanush', 'bow'], ['न', 'na', 'नल', 'nal', 'tap']] },
+  { g: 'प-वर्ग', gl: 'pa-varg · lips', l: [['प', 'pa', 'पतंग', 'patang', 'kite'], ['फ', 'pha', 'फल', 'phal', 'fruit'], ['ब', 'ba', 'बतख', 'batakh', 'duck'], ['भ', 'bha', 'भालू', 'bhaalu', 'bear'], ['म', 'ma', 'मछली', 'machhli', 'fish']] },
+  { g: 'अन्तःस्थ', gl: 'antahstha', l: [['य', 'ya', 'यात्री', 'yaatri', 'traveller'], ['र', 'ra', 'रथ', 'rath', 'chariot'], ['ल', 'la', 'लट्टू', 'lattoo', 'spinning top'], ['व', 'va', 'वन', 'van', 'forest']] },
+  { g: 'ऊष्म', gl: 'ushm', l: [['श', 'sha', 'शेर', 'sher', 'lion'], ['ष', 'Sha', 'षट्कोण', 'shatkon', 'hexagon'], ['स', 'sa', 'सेब', 'seb', 'apple'], ['ह', 'ha', 'हाथी', 'haathi', 'elephant']] },
+  { g: 'संयुक्त', gl: 'sanyukt · joined', l: [['क्ष', 'ksha', 'क्षत्रिय', 'kshatriya', 'warrior'], ['त्र', 'tra', 'त्रिशूल', 'trishool', 'trident'], ['ज्ञ', 'gya', 'ज्ञानी', 'gyaani', 'wise one'], ['श्र', 'shra', 'श्रमिक', 'shramik', 'worker']] }
+];
+const VY = [];
+ROWS.forEach((row, r) => row.l.forEach(([l, tr, w, wt, en, mid], c) =>
+  VY.push({ l, tr, w, wt, en, mid: !!mid, r, c, i: VY.length, say: mid ? `${l}, ${w}` : `${l} से ${w}`, note: mid ? `${l} comes inside the word` : '' })));
+
+/* ---------- timeline ---------- */
+const SW0 = 7, SWS = 1.8, VY0 = 33, VYS = 1.4;
+const SECTIONS = [
+  { id: 'intro', a: 0 }, { id: 'swarT', a: 4.5 }, { id: 'swar', a: SW0 },
+  { id: 'vyT', a: SW0 + SWAR.length * SWS }, { id: 'vy', a: VY0 }, { id: 'outro', a: VY0 + VY.length * VYS }
+];
+const OUT0 = SECTIONS[5].a;
+const CUES = [{ t: .8, text: 'हिंदी वर्णमाला', rate: .9 }, { t: 4.9, text: 'स्वर', rate: .9 }, { t: SECTIONS[3].a + .4, text: 'व्यंजन', rate: .9 }, { t: OUT0 + .6, text: 'शाबाश! बहुत बढ़िया!', rate: .95 }];
+SWAR.forEach((s, i) => CUES.push({ t: SW0 + i * SWS + .15, text: s.say, rate: .95 }));
+VY.forEach((v, i) => CUES.push({ t: VY0 + i * VYS + .08, text: v.say, rate: 1.1 }));
+CUES.sort((a, b) => a.t - b.t);
+
+/* ---------- math ---------- */
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const prog = (t, s, d) => clamp((t - s) / d);
+const eo = t => 1 - Math.pow(1 - clamp(t), 3);
+const eio = t => { t = clamp(t); return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+const back = t => { t = clamp(t); const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const hashStr = s => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.codePointAt(0), 16777619); return h >>> 0; };
+let boil = 0, jc = 0;
+function jit() { jc++; const n = Math.sin(jc * 12.9898 + boil * 78.233) * 43758.5453; return (n - Math.floor(n)) * 2 - 1; }
+
+/* ---------- shapes ---------- */
+const cache = new Map();
+const torn = (k, gen) => { if (!cache.has(k)) cache.set(k, gen()); return cache.get(k); };
+const R = (x, y, w, h) => [[x - w / 2, y - h / 2], [x + w / 2, y - h / 2], [x + w / 2, y + h / 2], [x - w / 2, y + h / 2]];
+const circPts = (r, n = 28, x = 0, y = 0, ry = r) => Array.from({ length: n }, (_, i) => [x + Math.cos(i / n * TAU) * r, y + Math.sin(i / n * TAU) * ry]);
+function leafPts(len, wid, n = 10) {
+  const a = [];
+  for (let i = 0; i <= n; i++) { const t = i / n; a.push([t * len, -Math.sin(t * Math.PI) * wid]); }
+  for (let i = n - 1; i > 0; i--) { const t = i / n; a.push([t * len, Math.sin(t * Math.PI) * wid]); }
+  return a;
+}
+function tornPoly(base, seed, amp = 2.2, step = 7) {
+  const r = mulberry(seed), out = [], n = base.length;
+  for (let i = 0; i < n; i++) {
+    const a = base[i], b = base[(i + 1) % n];
+    const m = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+    for (let j = 0; j < m; j++) { const u = j / m; out.push([lerp(a[0], b[0], u) + (r() - .5) * amp * 2, lerp(a[1], b[1], u) + (r() - .5) * amp * 2]); }
+  }
+  return out;
+}
+const seg = (x1, y1, x2, y2, n) => {
+  n = n || Math.max(3, Math.round(Math.hypot(x2 - x1, y2 - y1) / 24));
+  return Array.from({ length: n + 1 }, (_, i) => [lerp(x1, x2, i / n), lerp(y1, y2, i / n)]);
+};
+const ell = (x, y, rx, ry, n = 24, a0 = 0, a1 = TAU) =>
+  Array.from({ length: n + 1 }, (_, i) => { const t = lerp(a0, a1, i / n); return [x + Math.cos(t) * rx, y + Math.sin(t) * ry]; });
+
+/* ---------- primitives ---------- */
+let grainPat = null;
+function makeGrain() {
+  const g = document.createElement('canvas'); g.width = g.height = 180;
+  const gx = g.getContext('2d'), id = gx.createImageData(180, 180);
+  for (let i = 0; i < id.data.length; i += 4) { const v = 212 + Math.random() * 43; id.data[i] = v; id.data[i + 1] = v - 4; id.data[i + 2] = v - 11; id.data[i + 3] = 255; }
+  gx.putImageData(id, 0, 0);
+  gx.strokeStyle = 'rgba(120,85,45,.2)';
+  for (let i = 0; i < 50; i++) { const x = Math.random() * 180, y = Math.random() * 180; gx.beginPath(); gx.moveTo(x, y); gx.lineTo(x + (Math.random() - .5) * 22, y + (Math.random() - .5) * 22); gx.stroke(); }
+  grainPat = cx.createPattern(g, 'repeat');
+}
+function P(x, y, r, s, fn) {
+  if (s <= .001) return;
+  cx.save(); cx.translate(x, y); if (r) cx.rotate(r); if (s !== 1) cx.scale(s, s); fn(); cx.restore();
+}
+function poly(pts) { cx.beginPath(); cx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) cx.lineTo(pts[i][0], pts[i][1]); cx.closePath(); }
+function paper(pts, col, shadow = true) {
+  if (shadow) { cx.save(); cx.translate(4, 5); cx.fillStyle = 'rgba(70,40,12,.26)'; poly(pts); cx.fill(); cx.restore(); }
+  cx.fillStyle = col; poly(pts); cx.fill();
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  cx.save(); cx.clip(); cx.globalAlpha = .38; cx.globalCompositeOperation = 'multiply';
+  cx.fillStyle = grainPat; cx.fillRect(x0, y0, x1 - x0, y1 - y0); cx.restore();
+}
+function rough(pts, { w = 3, col = C.ink, p = 1, wob = 1.6, passes = 2 } = {}) {
+  if (p <= 0) return;
+  let q = pts;
+  if (p < 1) {
+    const f = (pts.length - 1) * p, k = Math.floor(f), u = f - k;
+    q = pts.slice(0, k + 1);
+    if (k < pts.length - 1) q.push([lerp(pts[k][0], pts[k + 1][0], u), lerp(pts[k][1], pts[k + 1][1], u)]);
+  }
+  if (q.length < 2) return;
+  cx.save(); cx.strokeStyle = col; cx.lineCap = 'round'; cx.lineJoin = 'round';
+  for (let s = 0; s < passes; s++) {
+    cx.lineWidth = s ? w * .5 : w;
+    const r = q.map(([x, y]) => [x + jit() * wob, y + jit() * wob]);
+    cx.beginPath(); cx.moveTo(r[0][0], r[0][1]);
+    for (let i = 1; i < r.length - 1; i++) cx.quadraticCurveTo(r[i][0], r[i][1], (r[i][0] + r[i + 1][0]) / 2, (r[i][1] + r[i + 1][1]) / 2);
+    cx.lineTo(r[r.length - 1][0], r[r.length - 1][1]);
+    cx.stroke();
+  }
+  cx.restore();
+}
+function dot(x, y, r, col = C.ink) { if (r <= 0) return; cx.fillStyle = col; cx.beginPath(); cx.arc(x + jit() * .5, y + jit() * .5, r, 0, TAU); cx.fill(); }
+function tape(x, y, w, r) {
+  P(x, y, r, 1, () => {
+    const h = 24; cx.beginPath(); cx.moveTo(-w / 2, -h / 2); cx.lineTo(w / 2, -h / 2);
+    for (let k = 1; k <= 4; k++) cx.lineTo(w / 2 + (k % 2 ? -4 : 0), -h / 2 + k * h / 4);
+    cx.lineTo(-w / 2, h / 2);
+    for (let k = 3; k >= 0; k--) cx.lineTo(-w / 2 + (k % 2 ? 4 : 0), -h / 2 + k * h / 4);
+    cx.fillStyle = 'rgba(252,246,222,.66)'; cx.fill();
+    cx.strokeStyle = 'rgba(140,110,60,.18)'; cx.lineWidth = 1; cx.stroke();
+  });
+}
+function text(str, x, y, font, col, align = 'center', maxW = 0) {
+  cx.font = font; cx.fillStyle = col; cx.textAlign = align; cx.textBaseline = 'middle';
+  if (maxW) { const w = cx.measureText(str).width; if (w > maxW) { cx.save(); cx.translate(x, y); cx.scale(maxW / w, maxW / w); cx.fillText(str, 0, 0); cx.restore(); return; } }
+  cx.fillText(str, x, y);
+}
+function spark(x, y, s, col = C.turmeric) {
+  P(x, y, 0, s, () => {
+    rough(seg(0, -16, 0, 16, 3), { w: 3.5, col }); rough(seg(-16, 0, 16, 0, 3), { w: 3.5, col });
+    rough(seg(-7, -7, 7, 7, 2), { w: 2, col }); rough(seg(-7, 7, 7, -7, 2), { w: 2, col });
+  });
+}
+
+/* ---------- Mitthu the parrot (faces left) ---------- */
+function parrot(x, y, s, o = {}) {
+  const open = o.open || 0, flap = o.flap || 0;
+  P(x, y + (o.bob || 0), o.rot || 0, s, () => {
+    if (o.flip) cx.scale(-1, 1);
+    if (!o.flying) rough(seg(-70, 2, 70, 6, 6), { w: 7, col: C.brown });
+    paper(torn('ptl1', () => tornPoly([[6, -24], [24, -26], [44, 72], [30, 76]], 601, 1.2, 6)), C.leaf2);
+    paper(torn('ptl2', () => tornPoly([[0, -24], [14, -24], [22, 84], [10, 86]], 602, 1.2, 6)), '#3f9a3a');
+    paper(torn('pbd', () => tornPoly(circPts(30, 24, 0, -48, 44), 603, 1.4, 6)), C.parrot);
+    P(8, -62, flap, 1, () => paper(torn('pwg', () => tornPoly([[-12, -4], [14, 0], [22, 46], [2, 50]], 604, 1.2, 5)), '#3f9a3a'));
+    paper(torn('phd', () => tornPoly(circPts(25, 20, -6, -98), 605, 1.2, 5)), C.parrot);
+    rough(ell(-3, -84, 21, 8, 10, .1 * Math.PI, .9 * Math.PI), { w: 3, col: C.pink, wob: .8 });
+    P(-26, -96, 0, 1, () => {
+      P(0, 2, -open * .6, 1, () => paper(torn('plb', () => tornPoly([[2, 0], [-12, 6], [0, 10]], 606, .5, 4)), '#9e2a1c', false));
+      paper(torn('pub', () => tornPoly([[4, -10], [-10, -8], [-20, 2], [-14, 8], [-8, 2], [4, 4]], 607, .5, 4)), C.red, false);
+    });
+    dot(-12, -104, 6.5, '#fff'); dot(-13.5, -104, 3.2);
+    if (!o.flying) { rough([[-8, -8], [-10, 3]], { w: 3, col: '#7a6352' }); rough([[8, -8], [8, 3]], { w: 3, col: '#7a6352' }); }
+  });
+}
+function mouth(T, cueT, dur = 1) { const d = T - cueT; return d > 0 && d < dur ? Math.abs(Math.sin(d * 15)) : 0; }
+
+/* ---------- doodles for the swar words (about 130px) ---------- */
+const DOODLE = {
+  pom() {
+    paper(torn('dpom', () => tornPoly(circPts(50, 30, 0, 8), 801, 1.6, 6)), '#c7303a');
+    paper(torn('dpomc', () => tornPoly([[-14, -38], [-20, -60], [-7, -48], [0, -64], [7, -48], [20, -60], [14, -38]], 802, .8, 4)), '#9e2230');
+    rough(ell(-18, 4, 16, 22, 10, Math.PI * 1.1, Math.PI * 1.6), { w: 3.5, col: 'rgba(255,255,255,.75)' });
+  },
+  mango() {
+    rough([[4, -44], [8, -62]], { w: 4, col: C.brown });
+    P(10, -58, -.4, 1, () => paper(torn('dml', () => tornPoly(leafPts(56, 14), 803, .8, 5)), C.leaf));
+    P(0, 0, -.5, 1, () => paper(torn('dmg', () => tornPoly(circPts(46, 30, 0, 0, 36), 804, 1.4, 6)), '#f6a623'));
+    dot(14, 10, 14, 'rgba(232,93,42,.55)');
+  },
+  tamarind() {
+    for (let k = 0; k < 5; k++) P(-56 + k * 28, Math.sin(k * .9) * 12, 0, 1, () => paper(torn('dtm' + k, () => tornPoly(circPts(17, 14, 0, 0, 15), 805 + k, 1, 5)), k % 2 ? '#8a5a33' : '#9c6a3e'));
+    rough([[-72, 0], [-86, -8]], { w: 3, col: C.brown });
+  },
+  cane() {
+    [-26, 0, 26].forEach((x, k) => P(x, 10, (k - 1) * .12, 1, () => {
+      paper(torn('dcn' + k, () => tornPoly(R(0, 0, 16, 150), 810 + k, .8, 5)), k === 1 ? '#6ea040' : '#86b84e');
+      for (let j = -2; j <= 2; j++) rough(seg(-8, j * 30, 8, j * 30 + 2, 2), { w: 2.5, col: '#3f6b24' });
+    }));
+    P(-10, -62, -2.2, 1, () => paper(torn('dcl1', () => tornPoly(leafPts(60, 9), 814, .6, 5)), C.leaf));
+    P(8, -64, -.9, 1, () => paper(torn('dcl2', () => tornPoly(leafPts(56, 9), 815, .6, 5)), C.leaf));
+  },
+  owl(T) {
+    paper(torn('dow', () => tornPoly(circPts(44, 28, 0, 8, 54), 820, 1.4, 6)), '#9a6b43');
+    paper(torn('dowt1', () => tornPoly([[-40, -30], [-30, -62], [-16, -40]], 821, .8, 4)), '#7c5433');
+    paper(torn('dowt2', () => tornPoly([[40, -30], [30, -62], [16, -40]], 822, .8, 4)), '#7c5433');
+    paper(torn('dowb', () => tornPoly(circPts(26, 20, 0, 26, 32), 823, 1, 5)), '#e8c89a');
+    [-18, 18].forEach(x => { dot(x, -16, 16, '#fffaf0'); rough(ell(x, -16, 16, 16, 14), { w: 2.5, wob: .8 }); });
+    if ((T % 2.4) < .15) { rough(seg(-26, -16, -10, -16, 2), { w: 3 }); rough(seg(10, -16, 26, -16, 2), { w: 3 }); }
+    else { dot(-16, -15, 7); dot(20, -15, 7); }
+    paper(torn('dowk', () => tornPoly([[-7, -2], [7, -2], [0, 12]], 824, .5, 4)), C.turmeric, false);
+  },
+  wool() {
+    rough([[40, -50], [-54, 60]], { w: 5, col: '#c68a3e' }); rough([[-40, -54], [56, 50]], { w: 5, col: '#c68a3e' });
+    paper(torn('dwl', () => tornPoly(circPts(48, 30), 830, 1.4, 6)), C.pink);
+    for (let k = 0; k < 4; k++) rough(ell(0, 0, 44 - k * 3, 20 + k * 7, 14, Math.PI * (.1 + k * .2), Math.PI * (.9 + k * .2)), { w: 2, col: '#b5456a', wob: .8 });
+    rough([[40, 26], [60, 40], [52, 60], [70, 72]], { w: 2.5, col: '#b5456a' });
+  },
+  sage() {
+    paper(torn('dsgb', () => tornPoly(circPts(16, 14, 0, -58), 840, 1, 5)), '#b9b3ab');
+    paper(torn('dsgf', () => tornPoly(circPts(36, 24, 0, -16), 841, 1.2, 5)), '#e3a877');
+    paper(torn('dsgd', () => tornPoly([[-34, 0], [34, 0], [26, 44], [0, 70], [-26, 44]], 842, 1.6, 6)), '#fbf7f0');
+    rough(ell(-13, -20, 7, 4, 6, 0, Math.PI), { w: 2.5, wob: .6 }); rough(ell(13, -20, 7, 4, 6, 0, Math.PI), { w: 2.5, wob: .6 });
+    rough(seg(0, -46, 0, -32, 2), { w: 4, col: C.vermilion });
+    rough([[-18, 4], [0, -2], [18, 4]], { w: 3, col: '#9a948c' });
+  },
+  one() {
+    paper(torn('d1', () => tornPoly(R(0, 0, 110, 130), 850, 1.4, 6)), '#fffaf0');
+    text('१', 0, 6, `100px ${FD}`, C.vermilion);
+    text('1', 38, -44, `700 26px ${FK}`, C.pen);
+  },
+  glasses() {
+    rough([[-66, -10], [-86, -24]], { w: 4 }); rough([[66, -10], [86, -24]], { w: 4 });
+    [-36, 36].forEach(x => { dot(x, 0, 27, 'rgba(142,202,230,.55)'); rough(ell(x, 0, 28, 28, 18), { w: 5 }); });
+    rough(ell(0, 2, 10, 8, 8, Math.PI, TAU), { w: 4 });
+  },
+  mortar() {
+    rough([[26, -64], [-2, 4]], { w: 13, col: '#9c6a3e' });
+    paper(torn('dmo', () => tornPoly(ell(0, -4, 56, 56, 16, 0, Math.PI).slice(0, 17), 860, 1.4, 6)), '#8f8a83');
+    rough(ell(0, -4, 56, 9, 18), { w: 3 });
+    paper(torn('dmob', () => tornPoly(R(0, 58, 56, 14), 861, 1, 5)), '#76716b');
+  },
+  hammer() {
+    P(0, 0, -.55, 1, () => {
+      paper(torn('dhh', () => tornPoly(R(0, 24, 18, 120), 870, 1, 5)), '#b07a45');
+      paper(torn('dhd', () => tornPoly(R(0, -44, 84, 32), 871, 1, 5)), '#8a8f99');
+    });
+  },
+  grapes() {
+    rough([[0, -52], [4, -70]], { w: 4, col: C.brown });
+    P(6, -62, -.3, 1, () => paper(torn('dgl', () => tornPoly(leafPts(46, 16), 880, .8, 5)), C.leaf));
+    [[-30, -30], [-10, -32], [10, -32], [30, -30], [-20, -10], [0, -10], [20, -10], [-10, 10], [10, 10], [0, 30]].forEach(([x, y], k) =>
+      paper(torn('dgr' + k, () => tornPoly(circPts(13, 14, x, y), 881 + k, .7, 4)), k % 3 ? '#7b4fa0' : '#9365b8'));
+  },
+  sunrise(T) {
+    for (let k = 0; k < 7; k++) { const a = Math.PI + (k + .5) / 7 * Math.PI + Math.sin(T * 2) * .03; rough(seg(Math.cos(a) * 54, 20 + Math.sin(a) * 54, Math.cos(a) * 76, 20 + Math.sin(a) * 76, 2), { w: 3.5, col: '#d88f10' }); }
+    paper(torn('dsn', () => tornPoly(ell(0, 20, 46, 46, 16, Math.PI, TAU), 890, 1.2, 6)), C.turmeric);
+    paper(torn('dsh', () => tornPoly([[-80, 20], [-30, 4], [20, 18], [80, 8], [80, 44], [-80, 44]], 891, 1.4, 6)), '#7fb04a');
+    rough([[-60, -54], [-52, -48], [-44, -54]], { w: 2.5 }); rough([[-34, -66], [-28, -60], [-22, -66]], { w: 2.5 });
+  }
+};
+
+/* ---------- reusable pieces ---------- */
+const CARDC = [C.marigold, C.teal, C.vermilion, C.indigo, C.pink, C.leaf, '#c26a1c'];
+const ROWC = ['#ffd9a0', '#c8e6c0', '#bfe3e8', '#f7c6d4', '#d7cff0', '#ffe8a3', '#cfe0f5', '#f5d0b5'];
+const SWARC = ['#ffd58a', '#ffc7a6', '#ffe3a3'];
+function tile(ch, x, y, sz, col, s = 1, hl = false) {
+  const key = ch + sz;
+  P(x, y, ((hashStr(key) % 100) / 100 - .5) * .12, s * (hl ? 1.14 : 1), () => {
+    paper(torn('tl' + key, () => tornPoly(R(0, 0, sz, sz), hashStr(key), 1.2, 6)), col);
+    text(ch, 0, sz * .06, `700 ${sz * .56}px ${FK}`, C.ink, 'center', sz * .86);
+    if (hl) rough(ell(0, 0, sz * .74, sz * .74, 22), { w: 3.5, col: C.red });
+  });
+}
+function garland(t, y0 = 34) {
+  rough(ell(640, y0 - 10, 620, 52, 30, .05 * Math.PI, .95 * Math.PI), { w: 2, col: C.pen, passes: 1 });
+  for (let k = 0; k < 29; k++) {
+    const u = .05 + k / 28 * .9, a = u * Math.PI, x = 640 + Math.cos(Math.PI - a) * 620, y = y0 - 10 + Math.sin(a) * 52;
+    const s = back(prog(t, .05 + k * .03, .3));
+    if (k % 4 === 2) P(x, y + 8, .1, s, () => paper(torn('gl', () => tornPoly(leafPts(38, 10).map(([a2, b]) => [b, a2]), 901, .6, 4)), C.leaf));
+    else P(x, y, k, s, () => {
+      paper(torn('gm' + (k % 2), () => tornPoly(circPts(15, 16), 902 + k % 2, 2, 3)), k % 2 ? C.marigold : C.turmeric);
+      dot(0, 0, 5, k % 2 ? '#c2621a' : '#d18f12');
+    });
+  }
+}
+function sheetFor(i) { return torn('sheet' + i, () => tornPoly(R(640, 360, 1224, 668), 100 + i, 2.6, 9)); }
+const SHEETC = ['#fbeed7', '#fde3c8', '#f7efdf', '#e2efe6', '#f5efe4', '#fbeed7'];
+const SROT = [-.006, .008, -.004, .007, .004, -.006];
+
+/* ---------- scenes ---------- */
+function introScene(t, T) {
+  garland(t);
+  const conf = [['अ', 150, 250], ['क', 1120, 230], ['म', 210, 470], ['ग', 1150, 440], ['प', 110, 620], ['र', 960, 140], ['स', 320, 150], ['ह', 1000, 560], ['आ', 420, 610], ['ख', 820, 610]];
+  conf.forEach(([ch, x, y], k) => tile(ch, x, y, 64, ROWC[k % ROWC.length], back(prog(t, 1.8 + k * .12, .3))));
+  P(430, 212, -.12, back(prog(t, .3, .35)), () => {
+    paper(torn('ihin', () => tornPoly(R(0, 0, 200, 90), 910, 1.6, 6)), C.turmeric);
+    text('हिंदी', 0, 4, `62px ${FD}`, C.ink);
+  });
+  P(640, 340, -.02, back(prog(t, .6, .45)), () => {
+    paper(torn('ivm', () => tornPoly(R(0, 0, 720, 200), 911, 2.4, 9)), C.vermilion);
+    text('वर्णमाला', 0, 8, `150px ${FD}`, C.cream, 'center', 660);
+    tape(-350, -92, 100, -.6); tape(350, -92, 100, .6);
+  });
+  P(640, 492, .01, back(prog(t, 1.4, .35)), () => {
+    paper(torn('isub', () => tornPoly(R(0, 0, 560, 64), 912, 1.4, 7)), C.cream);
+    text('Hindi Varnmala · the Hindi alphabet', 0, 3, `700 32px ${FK}`, C.ink, 'center', 520);
+  });
+  const f = eio(prog(t, 2.2, 1.3));
+  parrot(lerp(1400, 1080, f), lerp(260, 640, f) - Math.sin(f * Math.PI) * 60, 1.25, { flying: f < 1, flap: f < 1 ? Math.sin(t * 22) * .9 : Math.sin(t * 3) * .06, open: f < 1 ? 0 : mouth(T, 3.5, .6) });
+}
+function titleScene(t, T, big, sub, count, letters, col, cueT) {
+  P(600, 290, -.03, back(prog(t, .2, .45)), () => {
+    paper(torn('tt' + big, () => tornPoly(R(0, 0, 640, 250), hashStr(big), 2.4, 9)), col);
+    text(big, 0, 10, `190px ${FD}`, C.cream, 'center', 580);
+    tape(-300, -118, 100, -.5); tape(300, -118, 100, .5);
+  });
+  P(560, 470, .015, back(prog(t, .6, .35)), () => {
+    paper(torn('ts' + big, () => tornPoly(R(0, 0, 520, 66), hashStr(sub), 1.4, 7)), C.cream);
+    text(sub, 0, 3, `700 34px ${FK}`, C.ink, 'center', 480);
+  });
+  P(960, 150, .12, back(prog(t, 1, .35)), () => {
+    paper(torn('tc' + big, () => tornPoly(circPts(62, 26), hashStr(count), 2, 6)), C.turmeric);
+    text(count, 0, 4, `700 26px ${FK}`, C.ink, 'center', 110);
+  });
+  letters.forEach((ch, k) => tile(ch, 180 + k * 86, 590, 66, ROWC[k % ROWC.length], back(prog(t, 1.2 + k * .1, .3))));
+  parrot(1080, 630, 1.2, { open: mouth(T, cueT, .7), flap: Math.sin(t * 3) * .06, bob: Math.sin(t * 4) * 2 });
+  [[860, 360], [1180, 300], [110, 170]].forEach(([x, y], k) => spark(x, y, back(prog(t, 1.4 + k * .2, .3)) * (.8 + .2 * Math.sin(t * 7 + k))));
+}
+function wordTag(it, ci) {
+  const s = back(prog(ci, .35, .3));
+  P(330, 578, .012, s, () => {
+    paper(torn('wt', () => tornPoly(R(0, 0, 420, 108), 920, 1.6, 8)), C.cream);
+    cx.font = `700 50px ${FK}`;
+    const full = cx.measureText(it.w).width;
+    let pre = '';
+    if (!it.mid && it.w.startsWith(it.l)) {
+      const rest = it.w.slice(it.l.length), m = rest.match(/^[ऀ-ःऺ-ौॎॏ॑-ॗॢॣ]*/)[0];
+      if (rest[m.length] !== '्') pre = it.l + m;
+    }
+    const x0 = -full / 2;
+    if (pre) {
+      text(pre, x0, -18, `700 50px ${FK}`, C.vermilion, 'left');
+      const pw = cx.measureText(pre).width;
+      text(it.w.slice(pre.length), x0 + pw, -18, `700 50px ${FK}`, C.ink, 'left');
+    } else text(it.w, 0, -18, `700 50px ${FK}`, C.ink);
+    const sub = `${it.wt} · ${it.en}` + (it.note ? ` · ${it.note}` : '');
+    text(sub, 0, 30, `400 24px ${FK}`, C.pen, 'center', 390);
+    tape(-196, -46, 64, -.6);
+  });
+}
+function focusCard(list, k, sc, rot, alpha, kind) {
+  const it = list[k];
+  P(330, 290, rot, sc, () => {
+    cx.globalAlpha = alpha;
+    paper(torn('card' + kind + k, () => tornPoly(R(0, 0, 380, 400), 700 + k + (kind === 's' ? 0 : 60), 2.4, 9)), CARDC[(k + (kind === 's' ? 0 : 3)) % CARDC.length]);
+    const f = `${k % 2 ? '700 ' : ''}${kind === 's' || k % 2 === 0 ? 200 : 210}px ${k % 2 ? FK : FD}`;
+    text(it.l, 5, -18, f, 'rgba(43,42,51,.28)', 'center', 320);
+    text(it.l, 0, -24, f, C.cream, 'center', 320);
+    text(it.tr, 0, 152, `700 44px ${FK}`, C.cream);
+    tape(0, -198, 110, -.04);
+  });
+}
+function boardScene(t, T, kind) {
+  const isS = kind === 's', list = isS ? SWAR : VY, start = isS ? SW0 : VY0, step = isS ? SWS : VYS, n = list.length;
+  const i = clamp(Math.floor((T - start) / step), 0, n - 1), ci = T - start - i * step;
+  // chart header
+  text(isS ? 'स्वर' : 'व्यंजन', 660, 78, `48px ${FD}`, C.ink, 'left');
+  cx.font = `48px ${FD}`; const hw = cx.measureText(isS ? 'स्वर' : 'व्यंजन').width;
+  text(isS ? 'Swar · vowels' : 'Vyanjan · consonants', 676 + hw, 84, `700 26px ${FK}`, C.pen, 'left');
+  rough(seg(660, 112, 1210, 114, 14), { w: 2.5, col: C.pen });
+  // chart
+  if (isS) {
+    SWAR.forEach((it, k) => {
+      if (k > i) { rough(ell(720 + (k % 5) * 116, 190 + Math.floor(k / 5) * 116, 40, 40, 16), { w: 1.5, col: 'rgba(107,98,112,.35)', passes: 1 }); return; }
+      tile(it.l, 720 + (k % 5) * 116, 190 + Math.floor(k / 5) * 116, 96, SWARC[k % 3], k === i ? back(prog(ci, 0, .3)) : 1, k === i);
+    });
+    text('अ – औ: 11 swar   ·   अं अः: 2 ayogvah', 660, 560, `700 24px ${FK}`, C.pen, 'left');
+  } else {
+    ROWS.forEach((row, r) => {
+      const first = VY.findIndex(v => v.r === r);
+      if (first > i) return;
+      const y = 150 + r * 62;
+      text(row.g, 660, y - 10, `700 26px ${FK}`, C.ink, 'left', 140);
+      text(row.gl, 660, y + 17, `400 16px ${FK}`, C.pen, 'left', 150);
+    });
+    VY.forEach((it, k) => {
+      const x = 840 + it.c * 74, y = 150 + it.r * 62;
+      if (k > i) { rough(ell(x, y, 24, 24, 12), { w: 1.5, col: 'rgba(107,98,112,.3)', passes: 1 }); return; }
+      tile(it.l, x, y, 58, ROWC[it.r], k === i ? back(prog(ci, 0, .3)) : 1, k === i);
+    });
+  }
+  // focus card: the previous card stays underneath while the new one is slapped on
+  const rotOf = k => ((hashStr(kind + k) % 100) / 100 - .5) * .1;
+  if (i > 0 && ci < .4) focusCard(list, i - 1, 1, rotOf(i - 1), 1, kind);
+  const a = eo(ci / .3);
+  focusCard(list, i, lerp(1.3, 1, a), lerp(-.3, rotOf(i), a), clamp(ci / .1), kind);
+  if (isS) {
+    if (i > 0 && ci < .25) P(505, 140, -.12, 1 - ci / .25, () => DOODLE[list[i - 1].d](T));
+    P(505, 140, -.12 + Math.sin(T * 2) * .04, back(prog(ci, .25, .35)), () => DOODLE[list[i].d](T));
+  }
+  wordTag(list[i], ci);
+  parrot(592, 612, .85, { open: mouth(ci, isS ? .15 : .08, isS ? 1.2 : .9), flap: Math.sin(T * 3) * .06, bob: Math.sin(T * 5) * 2 });
+}
+function outroScene(t, T) {
+  garland(t, 30);
+  P(640, 118, -.02, back(prog(t, .2, .4)), () => {
+    paper(torn('osh', () => tornPoly(R(0, 0, 420, 120), 930, 2, 8)), C.turmeric);
+    text('शाबाश!', 0, 8, `96px ${FD}`, C.ink);
+  });
+  const all = SWAR.concat(VY);
+  all.forEach((it, k) => {
+    const c = k % 10, r = Math.floor(k / 10);
+    const col = k < 13 ? SWARC[k % 3] : ROWC[VY[k - 13].r];
+    tile(it.l, 298 + c * 76, 236 + r * 74, 62, col, back(prog(t, .5 + k * .035, .3)) * (1 + .04 * Math.sin(T * 4 + k * .5)));
+  });
+  P(640, 640, .01, back(prog(t, 2.4, .35)), () => {
+    paper(torn('ocap', () => tornPoly(R(0, 0, 720, 62), 931, 1.4, 8)), C.cream);
+    text('11 स्वर + अं अः   ·   33 व्यंजन + 4 संयुक्त', 0, 3, `700 32px ${FK}`, C.ink, 'center', 680);
+  });
+  parrot(1120, 600, 1.2, { open: mouth(T, OUT0 + .6, 1.6), flap: Math.sin(t * 16) * .5, bob: -Math.abs(Math.sin(t * 5)) * 10 });
+  [[150, 250], [1150, 250], [120, 520], [200, 380]].forEach(([x, y], k) => spark(x, y, back(prog(t, 1 + k * .25, .3)) * (.8 + .2 * Math.sin(t * 7 + k))));
+}
+
+const SCENES = {
+  intro: introScene,
+  swarT: (t, T) => titleScene(t, T, 'स्वर', 'Swar · the vowels', '13 letters', ['अ', 'आ', 'इ', 'ई', 'उ', 'ऊ', 'ए', 'ओ'], C.marigold, 4.9),
+  swar: (t, T) => boardScene(t, T, 's'),
+  vyT: (t, T) => titleScene(t, T, 'व्यंजन', 'Vyanjan · the consonants', '33 + 4', ['क', 'च', 'ट', 'त', 'प', 'य', 'श', 'क्ष'], C.teal, SECTIONS[3].a + .4),
+  vy: (t, T) => boardScene(t, T, 'v'),
+  outro: outroScene
+};
+function drawSection(k, T) {
+  const sec = SECTIONS[k], t = T - sec.a;
+  P(640, 360, SROT[k], 1, () => {
+    cx.translate(-640, -360);
+    const pts = sheetFor(k);
+    paper(pts, SHEETC[k]);
+    cx.save(); poly(pts); cx.clip(); SCENES[sec.id](t, T); cx.restore();
+    tape(58, 40, 120, -.7); tape(1222, 40, 120, .7);
+  });
+}
+function drawDesk() {
+  cx.fillStyle = '#b9844f'; cx.fillRect(0, 0, W, H);
+  cx.save(); cx.globalAlpha = .5; cx.globalCompositeOperation = 'multiply'; cx.fillStyle = grainPat; cx.fillRect(0, 0, W, H); cx.restore();
+}
+function render(T) {
+  T = clamp(T, 0, DUR);
+  boil = Math.floor(T * 8); jc = 0;
+  cx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+  drawDesk();
+  let k = 0; for (let j = 0; j < SECTIONS.length; j++) if (T >= SECTIONS[j].a) k = j;
+  const lt = T - SECTIONS[k].a, s = k > 0 ? eio(prog(lt, 0, .7)) : 1;
+  if (s < 1) drawSection(k - 1, T);
+  cx.save();
+  if (s < 1) { cx.translate((1 - s) * 1400, -(1 - s) * 60); cx.rotate((1 - s) * .12); }
+  drawSection(k, T);
+  cx.restore();
+}
+
+/* ---------- music: tanpura drone, keherwa on tabla, santoor ---------- */
+let AC = null, MASTER = null, MUSIC = null, WET = null, NOISE = null, t0 = 0;
+function audioInit() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return false;
+  AC = new Ctx();
+  MASTER = AC.createGain(); MASTER.gain.value = 1;
+  MUSIC = AC.createGain(); MUSIC.gain.value = musicMuted ? 0 : .75; MUSIC.connect(MASTER);
+  const comp = AC.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 3;
+  MASTER.connect(comp); comp.connect(AC.destination);
+  const conv = AC.createConvolver(), len = AC.sampleRate * 2.4 | 0, ib = AC.createBuffer(2, len, AC.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = ib.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8); }
+  conv.buffer = ib; WET = AC.createGain(); WET.gain.value = .3; WET.connect(conv); conv.connect(MUSIC);
+  NOISE = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+  const nd = NOISE.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  return true;
+}
+const mtof = n => 440 * Math.pow(2, (n - 69) / 12);
+function route(node, rev = .4) { node.connect(MUSIC); if (rev) { const g = AC.createGain(); g.gain.value = rev; node.connect(g); g.connect(WET); } }
+function env(w, peak, att, dec) { const g = AC.createGain(); g.gain.setValueAtTime(.0001, w); g.gain.exponentialRampToValueAtTime(peak, w + att); g.gain.exponentialRampToValueAtTime(.0001, w + att + dec); return g; }
+function osc(type, f, w, end, dest) { const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, w); o.connect(dest); o.start(w); o.stop(end); return o; }
+function noiseSrc(w, dur, dest) { const s = AC.createBufferSource(); s.buffer = NOISE; s.connect(dest); s.start(w, Math.random() * (1.9 - dur)); s.stop(w + dur); }
+const SND = {
+  tanpura(w, f, v = .035) {
+    const pk = AC.createBiquadFilter(); pk.type = 'peaking'; pk.Q.value = 4; pk.gain.value = 10;
+    pk.frequency.setValueAtTime(700, w); pk.frequency.exponentialRampToValueAtTime(2600, w + 3);
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
+    const g = AC.createGain(); g.gain.setValueAtTime(0, w); g.gain.linearRampToValueAtTime(v, w + .04); g.gain.exponentialRampToValueAtTime(.0008, w + 4.4);
+    pk.connect(lp); lp.connect(g); route(g, .5);
+    osc('sawtooth', f, w, w + 4.5, pk); osc('sawtooth', f * 1.002, w, w + 4.5, pk);
+  },
+  dayan(w, f = 520, v = .07, dec = .25) {
+    const g = env(w, v, .003, dec); route(g, .25); osc('sine', f, w, w + dec + .05, g);
+    const g2 = env(w, v * .3, .002, dec * .5); route(g2, .2); osc('sine', f * 2.02, w, w + dec, g2);
+    const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500;
+    const g3 = env(w, v * .4, .001, .02); hp.connect(g3); route(g3, 0); noiseSrc(w, .03, hp);
+  },
+  bayan(w, v = .16, glide = false) {
+    const g = env(w, v, .005, .42); route(g, .15);
+    const o = osc('sine', glide ? 80 : 110, w, w + .48, g);
+    o.frequency.exponentialRampToValueAtTime(glide ? 118 : 72, w + .3);
+  },
+  click(w, v = .04, f = 3000) {
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 1.5;
+    const g = env(w, v, .001, .05); bp.connect(g); route(g, .1); noiseSrc(w, .06, bp);
+  },
+  bol(w, b, acc = 1) {
+    if (b === 'dha') { SND.bayan(w, .15 * acc); SND.dayan(w, 520, .07 * acc); }
+    else if (b === 'dhi') { SND.bayan(w, .13 * acc, true); SND.dayan(w, 560, .06 * acc, .35); }
+    else if (b === 'ge') SND.bayan(w, .14 * acc, true);
+    else if (b === 'na') SND.dayan(w, 700, .055 * acc, .15);
+    else if (b === 'ti') SND.click(w, .035 * acc, 3200);
+    else if (b === 'ka') SND.click(w, .05 * acc, 500);
+  },
+  santoor(w, f, v = .07) {
+    [-5, 5].forEach(d => { const g = env(w, v, .003, 1.5); route(g, .5); osc('triangle', f, w, w + 1.6, g).detune.value = d; });
+    const g2 = env(w, v * .35, .002, .3); route(g2, .3); osc('sine', f * 2, w, w + .35, g2);
+  },
+  ghungroo(w, v = .025) {
+    for (let k = 0; k < 7; k++) { const tt = w + Math.random() * .22, g = env(tt, v, .001, .12); route(g, .4); osc('sine', 4200 + Math.random() * 3200, tt, tt + .14, g); }
+    SND.click(w, v * 1.6, 7000);
+  },
+  swoosh(w) {
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.3;
+    bp.frequency.setValueAtTime(350, w); bp.frequency.exponentialRampToValueAtTime(2600, w + .45);
+    const g = AC.createGain(); g.gain.setValueAtTime(0, w); g.gain.linearRampToValueAtTime(.2, w + .18); g.gain.linearRampToValueAtTime(0, w + .6);
+    bp.connect(g); route(g, .3); noiseSrc(w, .65, bp);
+  },
+  pop(w, f = 600, v = .08) { const g = env(w, v, .003, .12); route(g, .25); osc('sine', f, w, w + .16, g).frequency.exponentialRampToValueAtTime(f * 1.9, w + .07); }
+};
+function buildScore() {
+  const ev = [], add = (t, fn) => ev.push({ t, fn });
+  // tanpura cycle: Pa Sa Sa Sa(low), ending before the last second
+  const TAN = [43, 48, 48, 36];
+  for (let k = 0, t = 0; t < DUR - 2; k++, t += 1.2) add(t, w => SND.tanpura(w, mtof(TAN[k % 4])));
+  // keherwa under the letter boards: dha ge na ti na ka dhi na
+  const BOLS = ['dha', 'ge', 'na', 'ti', 'na', 'ka', 'dhi', 'na'], BEAT = .6;
+  [[SW0, SECTIONS[3].a], [VY0, OUT0]].forEach(([a, b]) => {
+    let k = 0;
+    for (let t = a; t < b - .05; t += BEAT, k++) { const bol = BOLS[k % 8], acc = k % 8 === 0 ? 1.2 : 1; add(t, w => SND.bol(w, bol, acc)); }
+    add(b - .02, w => SND.bol(w, 'dha', 1.3));
+  });
+  // santoor phrases in Bhupali (S R G P D)
+  const PENT = [60, 62, 64, 67, 69, 72, 74, 76, 79, 81, 84, 86, 88];
+  [72, 74, 76, 79, 81, 79, 76, 74, 72, 67].forEach((n, k) => add(.3 + k * .32, w => SND.santoor(w, mtof(n), .06)));
+  [67, 69, 72, 74, 76, 79].forEach((n, k) => add(4.6 + k * .14, w => SND.santoor(w, mtof(n), .055)));
+  [64, 67, 69, 72, 74, 76].forEach((n, k) => add(SECTIONS[3].a + .1 + k * .14, w => SND.santoor(w, mtof(n), .055)));
+  [72, 76, 79, 84, 81, 79, 84, 88, 86, 84, 79, 84].forEach((n, k) => add(OUT0 + .2 + k * .2, w => SND.santoor(w, mtof(n), .06)));
+  add(OUT0 + 3, w => SND.santoor(w, mtof(72), .07)); add(OUT0 + 3, w => SND.santoor(w, mtof(79), .05)); add(OUT0 + 3, w => SND.santoor(w, mtof(84), .05));
+  // one santoor note and a paper pop per letter
+  SWAR.forEach((s, i) => { add(SW0 + i * SWS, w => { SND.santoor(w, mtof(PENT[i]), .035); SND.pop(w, 520, .05); }); });
+  VY.forEach((v, i) => { add(VY0 + i * VYS, w => { SND.santoor(w, mtof(PENT[(v.r * 2 + v.c) % 10] + 12), .025); SND.pop(w, 560, .04); }); });
+  // paper sheets and bells between sections
+  SECTIONS.slice(1).forEach(s => add(s.a - .05, w => SND.swoosh(w)));
+  [4.8, SECTIONS[3].a + .3, OUT0 + .4, OUT0 + 2].forEach(t => add(t, w => SND.ghungroo(w)));
+  for (let k = 0; k < 50; k++) if (k % 3 === 0) add(OUT0 + .5 + k * .035, w => SND.pop(w, 700 + (k % 7) * 70, .03));
+  return ev.sort((a, b) => a.t - b.t);
+}
+const SCORE = buildScore();
+
+/* ---------- voice: the browser's Hindi text-to-speech ---------- */
+const hasTTS = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+let hiVoice = null, voiceOn = true;
+const vnote = document.getElementById('vnote');
+function pickVoice() {
+  if (!hasTTS) { vnote.textContent = "This browser can't speak text aloud, so the letters aren't read out. The music and on-screen words still play."; return; }
+  const vs = speechSynthesis.getVoices();
+  hiVoice = vs.find(v => /^hi([-_]|$)/i.test(v.lang)) || null;
+  if (hiVoice) vnote.textContent = `Letters are read aloud by your device's Hindi voice (${hiVoice.name}).`;
+  else if (vs.length) vnote.textContent = 'No Hindi voice was found on this device, so letters may not be read aloud. The music and on-screen words still play. Chrome and Edge include Hindi voices.';
+}
+if (hasTTS) { pickVoice(); speechSynthesis.addEventListener('voiceschanged', pickVoice); } else pickVoice();
+function say(str, rate) {
+  if (!hasTTS || !voiceOn) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(str);
+  u.lang = 'hi-IN'; if (hiVoice) u.voice = hiVoice;
+  u.rate = rate; u.pitch = 1.15; u.volume = 1;
+  speechSynthesis.speak(u);
+}
+function hush() { if (hasTTS) speechSynthesis.cancel(); }
+
+/* ---------- playback ---------- */
+const ov = document.getElementById('ov'), big = document.getElementById('big');
+const pp = document.getElementById('pp'), rs = document.getElementById('rs'), mu = document.getElementById('mu'), vo = document.getElementById('vo');
+const bar = document.getElementById('bar'), fill = document.getElementById('fill'), tm = document.getElementById('tm');
+let state = 'idle', musicMuted = false, posterT = 3.8, frozenT = 0, fallbackStart = 0, lastCueT = 0;
+
+function currentT() {
+  if (state === 'idle') return posterT;
+  if (state === 'ended') return DUR;
+  if (state === 'paused') return frozenT;
+  return AC ? AC.currentTime - t0 : (performance.now() / 1000 - fallbackStart);
+}
+function play(from = 0) {
+  from = clamp(from, 0, DUR - .05);
+  hush();
+  if (hasTTS) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }
+  if (AC) { try { AC.close(); } catch (e) {} AC = null; }
+  if (audioInit()) {
+    t0 = AC.currentTime + .1 - from;
+    SCORE.forEach(ev => { if (ev.t >= from - .02) ev.fn(t0 + ev.t); });
+    if (AC.state === 'suspended') AC.resume();
+  } else fallbackStart = performance.now() / 1000 - from;
+  lastCueT = from - .3;
+  state = 'playing'; ov.hidden = true; pp.textContent = 'Pause';
+}
+function pause() {
+  if (state !== 'playing') return;
+  frozenT = currentT(); state = 'paused'; pp.textContent = 'Play'; hush();
+  if (AC) AC.suspend();
+}
+function resume() {
+  if (state !== 'paused') return;
+  if (AC) AC.resume(); else fallbackStart = performance.now() / 1000 - frozenT;
+  state = 'playing'; pp.textContent = 'Pause';
+}
+function toggle() {
+  if (state === 'idle' || state === 'ended') play(0);
+  else if (state === 'playing') pause();
+  else resume();
+}
+big.addEventListener('click', toggle);
+pp.addEventListener('click', toggle);
+rs.addEventListener('click', () => play(0));
+mu.addEventListener('click', () => {
+  musicMuted = !musicMuted; mu.textContent = musicMuted ? 'Unmute music' : 'Mute music'; mu.setAttribute('aria-pressed', String(musicMuted));
+  if (MUSIC) MUSIC.gain.setTargetAtTime(musicMuted ? 0 : .75, AC.currentTime, .05);
+});
+vo.addEventListener('click', () => {
+  voiceOn = !voiceOn; vo.textContent = voiceOn ? 'Voice on' : 'Voice off'; vo.setAttribute('aria-pressed', String(voiceOn));
+  if (!voiceOn) hush();
+});
+bar.addEventListener('click', e => { const r = bar.getBoundingClientRect(); play(clamp((e.clientX - r.left) / r.width) * DUR); });
+bar.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); play(clamp(currentT() + (e.key === 'ArrowRight' ? 5 : -5), 0, DUR)); }
+});
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && !/INPUT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) { e.preventDefault(); toggle(); }
+});
+
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+function resize() {
+  const r = cv.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.max(2, Math.round(r.width * d)); cv.height = Math.max(2, Math.round(r.height * d));
+}
+window.addEventListener('resize', resize);
+
+function frame() {
+  let T = currentT();
+  if (state === 'playing') {
+    if (T >= DUR) { state = 'ended'; T = DUR; pp.textContent = 'Play'; big.innerHTML = '&#8635; Watch again'; ov.hidden = false; }
+    else {
+      // speak each cue as the playhead passes it; skip cues missed by a long stall
+      for (const c of CUES) if (c.t > lastCueT && c.t <= T && T - c.t < .5) say(c.text, c.rate);
+      lastCueT = T;
+    }
+  }
+  render(T);
+  const shown = state === 'idle' ? 0 : clamp(T, 0, DUR);
+  fill.style.width = (shown / DUR * 100) + '%';
+  tm.textContent = `${fmt(shown)} / ${fmt(DUR)}`;
+  bar.setAttribute('aria-valuenow', String(Math.round(shown)));
+  requestAnimationFrame(frame);
+}
+
+const fontsReady = Promise.all([
+  document.fonts.load('700 40px Kalam', 'कa'), document.fonts.load('400 40px Kalam', 'कa'), document.fonts.load('40px "Yatra One"', 'कa')
+]).catch(() => {});
+Promise.race([fontsReady, new Promise(r => setTimeout(r, 2500))]).then(() => {
+  cache.clear(); makeGrain(); resize(); requestAnimationFrame(frame);
+});
+})();
+</script>
+</body>
+</html>
