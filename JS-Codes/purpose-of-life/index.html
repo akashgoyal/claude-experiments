@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Purpose, Piece by Piece</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Gochi+Hand&family=Special+Elite&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --desk: #c49a6c;
+    --desk-deep: #a97e52;
+    --ink: #2b2a33;
+    --paper: #f7f0e1;
+    --tomato: #e5533d;
+    --teal: #2a9d8f;
+    --mustard: #f2b134;
+  }
+  html, body { height: auto; }
+  body {
+    margin: 0;
+    background: radial-gradient(ellipse at 50% 20%, #cfa678 0%, var(--desk) 55%, var(--desk-deep) 100%) fixed, var(--desk);
+    color: var(--ink);
+    font-family: "Gochi Hand", "Comic Sans MS", "Marker Felt", cursive;
+    padding-block: 24px 40px;
+    padding-inline: 16px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+  h1 { margin: 0; font-weight: 400; font-size: clamp(26px, 4vw, 40px); line-height: 1.1; text-wrap: balance; }
+  .sub { margin: 0; font-family: "Special Elite", "Courier New", monospace; font-size: 14px; letter-spacing: .02em; opacity: .85; }
+  .stage {
+    position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9;
+    background: #b98b5b; border-radius: 3px; overflow: hidden;
+    box-shadow: 0 14px 34px rgba(60, 35, 10, .38), 0 2px 0 rgba(60, 35, 10, .25);
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+  .overlay {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: rgba(43, 42, 51, .16);
+  }
+  .bigplay {
+    font: 400 clamp(20px, 3.4vw, 32px) "Gochi Hand", cursive;
+    color: #fffaf0; background: var(--tomato); border: 0; cursor: pointer;
+    padding: .45em 1.1em .5em; transform: rotate(-2.5deg);
+    box-shadow: 4px 5px 0 rgba(43, 42, 51, .35);
+    clip-path: polygon(0 6%, 4% 0, 30% 4%, 58% 0, 86% 5%, 100% 0, 98% 48%, 100% 94%, 72% 100%, 44% 96%, 16% 100%, 1% 95%, 3% 50%);
+    transition: transform .15s ease;
+  }
+  .bigplay:hover { transform: rotate(-1deg) scale(1.04); }
+  .bigplay:focus-visible, .ctl:focus-visible, .bar:focus-visible { outline: 3px dashed var(--ink); outline-offset: 4px; }
+  .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; }
+  .ctl {
+    font: 400 19px "Gochi Hand", cursive; color: var(--ink); background: var(--paper);
+    border: 2px solid var(--ink); border-radius: 3px; padding: 3px 14px 4px; cursor: pointer;
+    box-shadow: 2px 3px 0 var(--ink);
+  }
+  .ctl:nth-child(odd) { transform: rotate(-1.2deg); }
+  .ctl:nth-child(even) { transform: rotate(1deg); }
+  .ctl:active { box-shadow: 0 1px 0 var(--ink); translate: 1px 2px; }
+  .bar {
+    flex: 1 1 160px; height: 12px; position: relative; cursor: pointer;
+    background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; overflow: hidden;
+  }
+  .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: repeating-linear-gradient(-45deg, var(--teal) 0 6px, #238a7e 6px 12px); }
+  .time { font-family: "Special Elite", "Courier New", monospace; font-size: 15px; font-variant-numeric: tabular-nums; min-width: 9ch; text-align: right; }
+  @media (max-width: 520px) { .time { min-width: 0; } .ctl { font-size: 17px; padding-inline: 10px; } }
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <header>
+    <h1>What is the purpose of life?</h1>
+    <p class="sub">A 48-second cut-paper film. Turn your sound on.</p>
+  </header>
+  <div class="stage">
+    <canvas id="cv" role="img" aria-label="Hand-drawn paper collage animation asking what the purpose of life is: making, loving, learning, helping, noticing, and finally making your own."></canvas>
+    <div class="overlay" id="ov"><button class="bigplay" id="big">&#9654; Play with sound</button></div>
+  </div>
+  <div class="controls">
+    <button class="ctl" id="pp">Play</button>
+    <button class="ctl" id="rs">Restart</button>
+    <button class="ctl" id="mu" aria-pressed="false">Mute</button>
+    <div class="bar" id="bar" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="48" aria-valuenow="0"><div class="fill" id="fill"></div></div>
+    <span class="time" id="tm">0:00 / 0:48</span>
+  </div>
+</main>
+
+<script>
+(() => {
+'use strict';
+const W = 1280, H = 720, DUR = 48, SCENE = 6, TAU = Math.PI * 2;
+const C = {
+  ink: '#2b2a33', pen: '#6b6270', tomato: '#e5533d', mustard: '#f2b134', teal: '#2a9d8f',
+  sky: '#8ecae6', pink: '#f4a3b4', leaf: '#6aa84f', leaf2: '#4f8a3c', leaf3: '#8cc46a',
+  brown: '#8a5a33', cream: '#fffaf0', grass: '#9ccc7c', lilac: '#b9a3e3'
+};
+const cv = document.getElementById('cv');
+const cx = cv.getContext('2d');
+
+/* ---------- math ---------- */
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const prog = (t, s, d) => clamp((t - s) / d);
+const eo = t => 1 - Math.pow(1 - clamp(t), 3);
+const eio = t => { t = clamp(t); return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+const back = t => { t = clamp(t); const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+function bounce(x) {
+  const n1 = 7.5625, d1 = 2.75;
+  if (x < 1 / d1) return n1 * x * x;
+  if (x < 2 / d1) return n1 * (x -= 1.5 / d1) * x + .75;
+  if (x < 2.5 / d1) return n1 * (x -= 2.25 / d1) * x + .9375;
+  return n1 * (x -= 2.625 / d1) * x + .984375;
+}
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+/* "boiling line" jitter: stable within a boil frame (8 per second) */
+let boil = 0, jc = 0;
+function jit() { jc++; const n = Math.sin(jc * 12.9898 + boil * 78.233) * 43758.5453; return (n - Math.floor(n)) * 2 - 1; }
+
+/* ---------- shapes ---------- */
+const cache = new Map();
+const torn = (k, gen) => { if (!cache.has(k)) cache.set(k, gen()); return cache.get(k); };
+const R = (x, y, w, h) => [[x - w / 2, y - h / 2], [x + w / 2, y - h / 2], [x + w / 2, y + h / 2], [x - w / 2, y + h / 2]];
+const circPts = (r, n = 28, x = 0, y = 0, ry = r) => Array.from({ length: n }, (_, i) => [x + Math.cos(i / n * TAU) * r, y + Math.sin(i / n * TAU) * ry]);
+function heartPts(s, n = 48, ox = 0, oy = 0) {
+  const a = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / n * TAU;
+    a.push([ox + 16 * Math.pow(Math.sin(t), 3) * s, oy - (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * s]);
+  }
+  return a;
+}
+function starPts(Ro, Ri, n = 5) {
+  const a = [];
+  for (let i = 0; i < n * 2; i++) { const r = i % 2 ? Ri : Ro, t = -Math.PI / 2 + i / (n * 2) * TAU; a.push([Math.cos(t) * r, Math.sin(t) * r]); }
+  return a;
+}
+function leafPts(len, wid, n = 10) {
+  const a = [];
+  for (let i = 0; i <= n; i++) { const t = i / n; a.push([t * len, -Math.sin(t * Math.PI) * wid]); }
+  for (let i = n - 1; i > 0; i--) { const t = i / n; a.push([t * len, Math.sin(t * Math.PI) * wid]); }
+  return a;
+}
+function cloudPts(w, h, seed) {
+  const r = mulberry(seed), a = [], n = 40, ph = r() * 6;
+  for (let i = 0; i < n; i++) {
+    const t = i / n * TAU, rr = 1 + .16 * Math.abs(Math.sin(t * 3.5 + ph));
+    let y = Math.sin(t) * h * rr; if (y > 0) y *= .4;
+    a.push([Math.cos(t) * w * rr, y]);
+  }
+  return a;
+}
+function tornPoly(base, seed, amp = 2.2, step = 7) {
+  const r = mulberry(seed), out = [], n = base.length;
+  for (let i = 0; i < n; i++) {
+    const a = base[i], b = base[(i + 1) % n];
+    const m = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+    for (let j = 0; j < m; j++) {
+      const u = j / m;
+      out.push([lerp(a[0], b[0], u) + (r() - .5) * amp * 2, lerp(a[1], b[1], u) + (r() - .5) * amp * 2]);
+    }
+  }
+  return out;
+}
+const seg = (x1, y1, x2, y2, n) => {
+  n = n || Math.max(3, Math.round(Math.hypot(x2 - x1, y2 - y1) / 24));
+  return Array.from({ length: n + 1 }, (_, i) => [lerp(x1, x2, i / n), lerp(y1, y2, i / n)]);
+};
+const ell = (x, y, rx, ry, n = 24, a0 = 0, a1 = TAU) =>
+  Array.from({ length: n + 1 }, (_, i) => { const t = lerp(a0, a1, i / n); return [x + Math.cos(t) * rx, y + Math.sin(t) * ry]; });
+
+/* ---------- drawing primitives ---------- */
+let grainPat = null;
+function makeGrain() {
+  const g = document.createElement('canvas'); g.width = g.height = 180;
+  const gx = g.getContext('2d'), id = gx.createImageData(180, 180);
+  for (let i = 0; i < id.data.length; i += 4) { const v = 212 + Math.random() * 43; id.data[i] = v; id.data[i + 1] = v - 4; id.data[i + 2] = v - 11; id.data[i + 3] = 255; }
+  gx.putImageData(id, 0, 0);
+  gx.strokeStyle = 'rgba(120,85,45,.2)';
+  for (let i = 0; i < 50; i++) { const x = Math.random() * 180, y = Math.random() * 180; gx.beginPath(); gx.moveTo(x, y); gx.lineTo(x + (Math.random() - .5) * 22, y + (Math.random() - .5) * 22); gx.stroke(); }
+  grainPat = cx.createPattern(g, 'repeat');
+}
+function P(x, y, r, s, fn) {
+  if (s <= .001) return;
+  cx.save(); cx.translate(x, y); if (r) cx.rotate(r); if (s !== 1) cx.scale(s, s); fn(); cx.restore();
+}
+function poly(pts) { cx.beginPath(); cx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) cx.lineTo(pts[i][0], pts[i][1]); cx.closePath(); }
+function paper(pts, col, shadow = true) {
+  if (shadow) { cx.save(); cx.translate(4, 5); cx.fillStyle = 'rgba(70,40,12,.26)'; poly(pts); cx.fill(); cx.restore(); }
+  cx.fillStyle = col; poly(pts); cx.fill();
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  cx.save(); cx.clip(); cx.globalAlpha = .38; cx.globalCompositeOperation = 'multiply';
+  cx.fillStyle = grainPat; cx.fillRect(x0, y0, x1 - x0, y1 - y0); cx.restore();
+}
+function rough(pts, { w = 3, col = C.ink, p = 1, wob = 1.6, passes = 2 } = {}) {
+  if (p <= 0) return;
+  let q = pts;
+  if (p < 1) {
+    const f = (pts.length - 1) * p, k = Math.floor(f), u = f - k;
+    q = pts.slice(0, k + 1);
+    if (k < pts.length - 1) q.push([lerp(pts[k][0], pts[k + 1][0], u), lerp(pts[k][1], pts[k + 1][1], u)]);
+  }
+  if (q.length < 2) return;
+  cx.save(); cx.strokeStyle = col; cx.lineCap = 'round'; cx.lineJoin = 'round';
+  for (let s = 0; s < passes; s++) {
+    cx.lineWidth = s ? w * .5 : w;
+    const r = q.map(([x, y]) => [x + jit() * wob, y + jit() * wob]);
+    cx.beginPath(); cx.moveTo(r[0][0], r[0][1]);
+    for (let i = 1; i < r.length - 1; i++) cx.quadraticCurveTo(r[i][0], r[i][1], (r[i][0] + r[i + 1][0]) / 2, (r[i][1] + r[i + 1][1]) / 2);
+    cx.lineTo(r[r.length - 1][0], r[r.length - 1][1]);
+    cx.stroke();
+  }
+  cx.restore();
+}
+function dot(x, y, r, col = C.ink) { if (r <= 0) return; cx.fillStyle = col; cx.beginPath(); cx.arc(x + jit() * .5, y + jit() * .5, r, 0, TAU); cx.fill(); }
+function tape(x, y, w, r) {
+  P(x, y, r, 1, () => {
+    const h = 24; cx.beginPath(); cx.moveTo(-w / 2, -h / 2); cx.lineTo(w / 2, -h / 2);
+    for (let k = 1; k <= 4; k++) cx.lineTo(w / 2 + (k % 2 ? -4 : 0), -h / 2 + k * h / 4);
+    cx.lineTo(-w / 2, h / 2);
+    for (let k = 3; k >= 0; k--) cx.lineTo(-w / 2 + (k % 2 ? 4 : 0), -h / 2 + k * h / 4);
+    cx.fillStyle = 'rgba(252,246,222,.66)'; cx.fill();
+    cx.strokeStyle = 'rgba(140,110,60,.18)'; cx.lineWidth = 1; cx.stroke();
+  });
+}
+function spark(x, y, s, col = C.mustard) {
+  P(x, y, 0, s, () => {
+    rough(seg(0, -18, 0, 18, 3), { w: 3.5, col }); rough(seg(-18, 0, 18, 0, 3), { w: 3.5, col });
+    rough(seg(-8, -8, 8, 8, 2), { w: 2, col }); rough(seg(-8, 8, 8, -8, 2), { w: 2, col });
+  });
+}
+function ground(y = 600) { rough(seg(40, y, 1240, y + 3, 26), { w: 2.5, col: C.pen }); }
+function grassTufts(xs, y = 600) { xs.forEach(x => rough([[x - 8, y], [x - 4, y - 12], [x, y], [x + 4, y - 16], [x + 8, y]], { w: 2, col: C.leaf2, wob: 1 })); }
+
+/* ---------- ransom-note lettering ---------- */
+const FONTS = ['"Abril Fatface", Georgia, serif', '"Special Elite", "Courier New", monospace', '"Gochi Hand", cursive', 'Georgia, serif'];
+const RCOL = [['#fffaf0', C.ink], [C.ink, '#fffaf0'], [C.tomato, '#fffaf0'], [C.mustard, C.ink], [C.sky, C.ink], ['#ffffff', C.tomato], [C.teal, '#fffaf0'], [C.pink, C.ink]];
+const layoutCache = new Map();
+function ransomLayout(sp) {
+  const key = sp.text + sp.seed;
+  if (layoutCache.has(key)) return layoutCache.get(key);
+  const r = mulberry(sp.seed), S = sp.size, items = [];
+  let x = 0, lastC = -1;
+  for (const ch of sp.text) {
+    if (ch === ' ') { x += S * .38; continue; }
+    const f = FONTS[Math.floor(r() * FONTS.length)];
+    let ci = Math.floor(r() * RCOL.length); if (ci === lastC) ci = (ci + 3) % RCOL.length; lastC = ci;
+    const fs = S * (.8 + r() * .3);
+    cx.font = `${fs}px ${f}`;
+    const w = cx.measureText(ch).width, bw = w + S * .3, bh = S * 1.1 + r() * S * .12;
+    items.push({ ch, f, fs, c: RCOL[ci], x: x + bw / 2, rot: (r() - .5) * .22, dy: (r() - .5) * S * .14, pts: tornPoly(R(0, 0, bw, bh), Math.floor(r() * 1e6), 1.4, 6) });
+    x += bw + S * .06;
+  }
+  const total = x - S * .06; items.forEach(it => it.x -= total / 2);
+  layoutCache.set(key, items); return items;
+}
+function ransom(sp, t) {
+  ransomLayout(sp).forEach((it, i) => {
+    const p = prog(t, sp.tIn + i * sp.step, .28); if (p <= 0) return;
+    P(sp.x + it.x, sp.y + it.dy, it.rot + (1 - p) * .7, back(p), () => {
+      paper(it.pts, it.c[0]);
+      cx.fillStyle = it.c[1]; cx.font = `${it.fs}px ${it.f}`; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      cx.fillText(it.ch, 0, it.fs * .05);
+    });
+  });
+}
+const RS = {
+  a: { scene: 0, text: 'WHAT IS THE', x: 520, y: 180, size: 46, tIn: .3, step: .06, seed: 11 },
+  b: { scene: 0, text: 'PURPOSE', x: 520, y: 318, size: 112, tIn: 1.0, step: .11, seed: 29 },
+  c: { scene: 0, text: 'OF LIFE?', x: 520, y: 458, size: 72, tIn: 1.9, step: .09, seed: 37 },
+  d: { scene: 7, text: 'YOURS TO MAKE', x: 620, y: 540, size: 56, tIn: 2.8, step: .08, seed: 53 }
+};
+
+/* ---------- captions ---------- */
+function caption(text, t, tIn = .5) {
+  if (t < tIn - .3) return;
+  const shown = Math.floor(clamp((t - tIn) / (text.length * .035)) * text.length);
+  cx.font = '40px "Gochi Hand", cursive';
+  const w = Math.min(1120, cx.measureText(text).width + 74);
+  const a = eo(prog(t, tIn - .3, .35));
+  P(640, 650 + (1 - a) * 50, -.012, 1, () => {
+    cx.globalAlpha = a;
+    paper(torn('cap' + text, () => tornPoly(R(0, 0, w, 66), text.length * 7 + 3, 1.6, 8)), C.cream);
+    cx.fillStyle = C.ink; cx.font = '40px "Gochi Hand", cursive'; cx.textAlign = 'left'; cx.textBaseline = 'middle';
+    cx.fillText(text.slice(0, shown), -w / 2 + 36, 2);
+    tape(-w / 2 + 12, -28, 72, -.55);
+  });
+}
+
+/* ---------- Pip, our little paper person ---------- */
+function pip(x, y, s, o = {}) {
+  const t = o.t || 0, walk = o.walk || 0, aL = o.aL ?? .12, aR = o.aR ?? .12, look = o.look || 0;
+  const head = o.head || C.mustard, shirt = o.shirt || C.teal;
+  P(x, y + (o.bob || 0), o.rot || 0, s, () => {
+    if (o.flip) cx.scale(-1, 1);
+    const sw = Math.sin(walk) * 12;
+    rough([[-7, -60], [-9 + sw * .5, -30], [-11 + sw, 0]], { w: 4.5 });
+    rough([[7, -60], [9 - sw * .5, -30], [11 - sw, 0]], { w: 4.5 });
+    rough(seg(-11 + sw, 0, -23 + sw, 1, 2), { w: 5 });
+    rough(seg(11 - sw, 0, 23 - sw, 1, 2), { w: 5 });
+    paper(torn('pb' + shirt, () => tornPoly(R(0, -88, 48, 64), 5, 1.6, 6)), shirt);
+    const arm = (sx, ang, side) => {
+      const c = Math.cos(ang), sn = Math.sin(ang);
+      const hd = [sx + c * 44, -110 + sn * 44];
+      rough([[sx, -110], [sx + c * 22 - sn * 4 * side, -110 + sn * 22 + c * 4 * side], hd], { w: 4.5 });
+      dot(hd[0], hd[1], 4.5);
+    };
+    arm(-20, Math.PI / 2 + aL * Math.PI * .75, 1);
+    arm(20, Math.PI / 2 - aR * Math.PI * .75, -1);
+    paper(torn('ph' + head, () => tornPoly(circPts(34, 26, 0, -150), 9, 1.5, 6)), head);
+    rough(ell(0, -150, 34, 34, 20), { w: 3 });
+    rough([[-4, -184], [-1, -197], [8, -194], [4, -186]], { w: 3 });
+    const ex = look * 6;
+    if ((t % 3.3) < .12) { rough(seg(-15 + ex, -153, -7 + ex, -153, 2), { w: 2.5 }); rough(seg(7 + ex, -153, 15 + ex, -153, 2), { w: 2.5 }); }
+    else { dot(-11 + ex, -153, 4); dot(11 + ex, -153, 4); }
+    cx.fillStyle = 'rgba(229,83,61,.35)';
+    cx.beginPath(); cx.arc(-21 + ex * .5, -140, 5.5, 0, TAU); cx.arc(21 + ex * .5, -140, 5.5, 0, TAU); cx.fill();
+    if (o.mouth === 'o') rough(ell(ex * .8, -136, 5, 6, 10), { w: 2.5, wob: .8 });
+    else rough(ell(ex * .8, -142, 10, 7, 8, .15 * Math.PI, .85 * Math.PI), { w: 2.5, wob: .8 });
+  });
+}
+function pipHand(x, y, s, a, right = true) {
+  const ang = right ? Math.PI / 2 - a * Math.PI * .75 : Math.PI / 2 + a * Math.PI * .75;
+  return [x + s * ((right ? 20 : -20) + Math.cos(ang) * 44), y + s * (-110 + Math.sin(ang) * 44)];
+}
+
+/* ---------- little collage icons (about 100px) ---------- */
+function icHouse() {
+  paper(torn('ihw', () => tornPoly(R(0, 18, 84, 60), 41, 1.4, 6)), C.sky);
+  paper(torn('ihr', () => tornPoly([[-56, -8], [0, -56], [56, -8]], 42, 1.4, 6)), C.tomato);
+  paper(torn('ihd', () => tornPoly(R(-16, 34, 20, 28), 43, 1, 5)), C.mustard);
+  rough([[12, 6], [32, 6], [32, 24], [12, 24], [12, 6]], { w: 2.5, wob: 1 });
+}
+function icHeart() {
+  const h = heartPts(3.3);
+  paper(torn('iht', () => tornPoly(h, 44, 1.3, 6)), C.tomato);
+  rough(h.concat([h[0]]), { w: 2.5, wob: 1 });
+}
+function icStar(col = C.mustard) {
+  const s = starPts(52, 23);
+  paper(torn('ist' + col, () => tornPoly(s, 45, 1.3, 6)), col);
+  rough(s.concat([s[0]]), { w: 2.5, wob: 1 });
+}
+function icTree() {
+  paper(torn('itt', () => tornPoly(R(0, 30, 18, 52), 46, 1, 5)), C.brown);
+  paper(torn('itc1', () => tornPoly(circPts(26, 20, -20, 0), 47, 1.3, 6)), C.leaf2);
+  paper(torn('itc2', () => tornPoly(circPts(26, 20, 20, 0), 48, 1.3, 6)), C.leaf);
+  paper(torn('itc3', () => tornPoly(circPts(30, 20, 0, -22), 49, 1.3, 6)), C.leaf3);
+}
+function icSun(rot = 0) {
+  for (let k = 0; k < 10; k++) { const a = rot + k / 10 * TAU; rough(seg(Math.cos(a) * 42, Math.sin(a) * 42, Math.cos(a) * 60, Math.sin(a) * 60, 2), { w: 3.5, col: '#d88f10', wob: 1 }); }
+  paper(torn('isn', () => tornPoly(circPts(34, 24), 50, 1.3, 6)), C.mustard);
+  rough(ell(-11, -4, 5, 4, 6, Math.PI, TAU), { w: 2.5, wob: .6 });
+  rough(ell(11, -4, 5, 4, 6, Math.PI, TAU), { w: 2.5, wob: .6 });
+  rough(ell(0, 8, 10, 7, 8, .1 * Math.PI, .9 * Math.PI), { w: 2.5, wob: .6 });
+}
+function icBook() {
+  paper(torn('ibc', () => tornPoly([[-58, -22], [0, -14], [58, -22], [56, 30], [0, 38], [-56, 30]], 51, 1.2, 6)), C.teal);
+  paper(torn('ibl', () => tornPoly([[-50, -30], [0, -20], [0, 28], [-48, 20]], 52, 1, 5)), C.cream);
+  paper(torn('ibr', () => tornPoly([[0, -20], [50, -30], [48, 20], [0, 28]], 53, 1, 5)), C.cream);
+  for (let k = 0; k < 3; k++) { rough(seg(-40, -14 + k * 11, -10, -9 + k * 11, 2), { w: 1.8, col: C.pen, wob: .6 }); rough(seg(10, -9 + k * 11, 40, -14 + k * 11, 2), { w: 1.8, col: C.pen, wob: .6 }); }
+}
+const ICONS = [icHouse, icHeart, icStar, icTree, t => icSun(t * .4), icBook];
+
+function flower(x, y, h, p, col, seed) {
+  if (p <= 0) return;
+  rough(seg(x, y, x + Math.sin(seed) * 6, y - h * clamp(p / .7), 3), { w: 3, col: C.leaf2 });
+  const q = back(prog(p, .7, .3));
+  if (q <= 0) return;
+  P(x + Math.sin(seed) * 6, y - h, seed, q, () => {
+    for (let k = 0; k < 5; k++) { const a = k / 5 * TAU; paper(torn('fp' + col + k, () => tornPoly(circPts(9, 12, Math.cos(a) * 11, Math.sin(a) * 11), 60 + k, .8, 4)), col, false); }
+    dot(0, 0, 6, C.mustard);
+  });
+}
+function butterfly(x, y, flap, s = 1) {
+  P(x, y, -.2, s, () => {
+    const k = .25 + .75 * Math.abs(Math.cos(flap));
+    cx.save(); cx.scale(k, 1);
+    paper(torn('bw1', () => tornPoly(circPts(20, 16, -18, -12, 16), 71, 1, 4)), C.pink);
+    paper(torn('bw2', () => tornPoly(circPts(20, 16, 18, -12, 16), 72, 1, 4)), C.pink);
+    paper(torn('bw3', () => tornPoly(circPts(13, 14, -13, 12, 11), 73, 1, 4)), C.lilac);
+    paper(torn('bw4', () => tornPoly(circPts(13, 14, 13, 12, 11), 74, 1, 4)), C.lilac);
+    cx.restore();
+    rough(seg(0, -18, 0, 22, 3), { w: 4 });
+    rough([[0, -18], [-6, -32], [-10, -36]], { w: 2, wob: .6 });
+    rough([[0, -18], [6, -32], [10, -36]], { w: 2, wob: .6 });
+  });
+}
+function bird(x, y, flap, s = 1) {
+  P(x, y, 0, s, () => {
+    rough([[22, 0], [40, -10]], { w: 3 }); rough([[22, 2], [40, 6]], { w: 3 });
+    paper(torn('bb', () => tornPoly(circPts(24, 22, 0, 0, 16), 81, 1.2, 5)), C.tomato);
+    paper(torn('bh', () => tornPoly(circPts(12, 16, -22, -12), 82, 1, 5)), C.tomato);
+    paper(torn('bk', () => tornPoly([[-32, -15], [-46, -10], [-32, -6]], 83, .5, 4)), C.mustard, false);
+    dot(-25, -15, 2.6);
+    const wy = -Math.sin(flap) * 20;
+    cx.fillStyle = '#c9432f'; poly([[-6, -2], [5, -2 + wy], [16, -2]]); cx.fill();
+    rough([[-6, -2], [5, -2 + wy], [16, -2]], { w: 2.5 });
+    rough(seg(-3, 16, -5, 26, 2), { w: 2 }); rough(seg(5, 16, 7, 26, 2), { w: 2 });
+  });
+}
+function textScrap(str, key, col = C.cream, fcol = C.ink) {
+  cx.font = '40px "Special Elite", "Courier New", monospace';
+  const w = cx.measureText(str).width + 28;
+  paper(torn('ts' + key, () => tornPoly(R(0, 0, w, 56), key.length * 13 + 7, 1.2, 6)), col);
+  cx.fillStyle = fcol; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(str, 0, 2);
+}
+
+/* ---------- scenes ---------- */
+const S1P = [
+  { st: .9, c: C.sky, base: R(790, 515, 300, 170), cx: 790, cy: 515 },
+  { st: 2.1, c: C.brown, base: R(890, 345, 38, 80), cx: 890, cy: 345 },
+  { st: 1.5, c: C.tomato, base: [[618, 440], [790, 296], [962, 440]], cx: 790, cy: 390 },
+  { st: 2.6, c: C.mustard, base: R(730, 550, 66, 100), cx: 730, cy: 550 },
+  { st: 3.0, c: C.cream, base: R(862, 500, 74, 62), cx: 862, cy: 500 }
+];
+const S3I = [
+  { x: 430, y: 215, k: 'star' }, { x: 560, y: 135, k: 'txt', s: 'a' }, { x: 700, y: 225, k: 'planet' },
+  { x: 830, y: 130, k: 'txt', s: 'π' }, { x: 955, y: 250, k: 'star2' }, { x: 1085, y: 150, k: 'txt', s: 'E=mc²' }
+];
+const S4CROWN = [[640, 330, 72, C.leaf2, 3.0], [578, 372, 56, C.leaf, 3.15], [706, 376, 58, C.leaf3, 3.3], [646, 272, 52, C.leaf, 3.45]];
+const S4FRUIT = [[600, 340], [680, 300], [700, 380], [620, 400], [650, 250]];
+const S5FL = [[560, 590, 62, C.pink], [625, 590, 80, C.cream], [700, 592, 55, C.tomato], [780, 594, 74, C.lilac], [860, 596, 60, C.pink]];
+const HEART_AT = [.5, 1.3, 2.3, 3.98, 4.98, 5.78];
+
+function orbitPos(i, T) {
+  const a = i / 6 * TAU + T * .55, r = lerp(430, 250, eo(T / 6));
+  return [640 + Math.cos(a) * r, 320 + Math.sin(a) * r * .5, Math.sin(a)];
+}
+function heartPos(u) {
+  return [640 + 16 * Math.pow(Math.sin(u), 3) * 10.5, 270 - (13 * Math.cos(u) - 5 * Math.cos(2 * u) - 2 * Math.cos(3 * u) - Math.cos(4 * u)) * 10.5];
+}
+
+const SC = [
+  // 0: the question
+  t => {
+    cx.fillStyle = 'rgba(107,98,112,.3)'; cx.font = '58px "Gochi Hand", cursive'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    [[130, 110, -.2], [1170, 110, .25], [90, 560, .15], [1190, 580, -.1], [760, 110, .3], [300, 610, -.3]].forEach(([x, y, r], i) => {
+      if (t > .1 + i * .2) P(x, y, r + jit() * .04, 1, () => cx.fillText('?', 0, 0));
+    });
+    rough(ell(1180, 330, 30, 30, 30, 0, TAU * 2.3).map(([x, y], i) => [x + i * .6, y]), { w: 2, col: 'rgba(107,98,112,.45)', p: prog(t, .5, 1.5) });
+    ransom(RS.a, t); ransom(RS.b, t); ransom(RS.c, t);
+    const ps = back(prog(t, 2.5, .4));
+    pip(1050, 612, 1.3 * ps, { t, look: .4, aL: .12, aR: t > 4.3 ? .6 + .12 * Math.sin(t * 10) : .12, mouth: t > 3.2 && t < 4.4 ? 'o' : 'smile' });
+    const qp = prog(t, 3.2, .9);
+    if (qp > 0) rough(ell(1100, 215, 38, 36, 16, -Math.PI * .95, Math.PI * .35).concat([[1103, 272], [1098, 300]]), { w: 8, col: C.tomato, p: qp });
+    dot(1097, 337, 8 * back(prog(t, 4.15, .25)), C.tomato);
+    if (t > 4.6) P(210, 640, -.04, back(prog(t, 4.6, .35)), () => textScrap('a small paper film', 'lbl', '#ffffff', C.pen));
+  },
+  // 1: to make things
+  t => {
+    ground(); grassTufts([120, 470, 1080, 1180]);
+    S1P.forEach((pc, i) => {
+      const p = prog(t, pc.st, .6); if (p <= 0) return;
+      P(pc.cx, pc.cy - (1 - bounce(p)) * 650, (1 - p) * .3 * (i % 2 ? 1 : -1), 1, () => {
+        cx.translate(-pc.cx, -pc.cy); paper(torn('s1' + i, () => tornPoly(pc.base, 201 + i, 2, 8)), pc.c);
+      });
+    });
+    dot(750, 555, 5 * back(prog(t, 3.0, .2)));
+    rough(seg(862, 471, 862, 529, 3), { w: 3, p: prog(t, 3.5, .25) });
+    rough(seg(827, 500, 897, 500, 3), { w: 3, p: prog(t, 3.7, .25) });
+    for (let k = 0; k < 3; k++) {
+      const ph = t - 3.8 - k * .55; if (ph <= 0) continue;
+      rough(ell(890 + Math.sin(ph * 3) * 12, 290 - ph * 45, 9 + ph * 5, 7 + ph * 4, 14, 0, TAU * .85), { w: 2.5, col: 'rgba(107,98,112,.7)' });
+    }
+    [[590, 300, 3.7], [1020, 380, 3.9], [1000, 250, 4.1], [560, 470, 4.3]].forEach(([x, y, s]) => spark(x, y, back(prog(t, s, .3)) * (.8 + .2 * Math.sin(t * 8 + x))));
+    const cheer = t > 3.4 && t < 5.2;
+    pip(330, 600, 1.15, { t, look: .6, aL: cheer ? .95 : .1, aR: cheer ? .95 : .18, bob: cheer ? -Math.abs(Math.sin((t - 3.4) * 9)) * 14 : 0, mouth: cheer ? 'o' : 'smile' });
+    caption("Some say it's to make things.", t);
+  },
+  // 2: to love
+  t => {
+    ground(); grassTufts([80, 300, 980, 1200]);
+    const p1 = eo(prog(t, .2, 2)), p2 = eo(prog(t, .3, 2)), arr = t > 2.3;
+    for (let k = 0; k < 8; k++) {
+      const ph = t - 2.9 - k * .32; if (ph <= 0) continue;
+      const x = 640 + Math.sin(ph * 3 + k) * 50 + (k - 3.5) * 34, y = 300 - ph * 110;
+      cx.save(); cx.globalAlpha = clamp(1 - ph / 2.6);
+      P(x, y, Math.sin(ph * 2 + k) * .3, .9, () => paper(torn('sh', () => tornPoly(heartPts(1.4), 91, .9, 5)), k % 2 ? C.pink : C.tomato));
+      cx.restore();
+    }
+    const hp = prog(t, 2.4, .5);
+    P(640, 330, 0, back(hp) * (1 + .05 * Math.sin(t * 7)), () => {
+      const h = heartPts(7.2);
+      paper(torn('bigheart', () => tornPoly(h, 92, 2, 8)), C.tomato);
+      rough(heartPts(5.6).concat([heartPts(5.6)[0]]), { w: 2.5, col: 'rgba(255,250,240,.7)' });
+    });
+    pip(lerp(110, 470, p1), 600, 1.15, { t, walk: p1 < 1 ? t * 10 : 0, look: .6, aL: .12, aR: arr ? .45 : .12 });
+    pip(lerp(1170, 810, p2), 600, 1.15, { t: t + 1.3, walk: p2 < 1 ? t * 10 : 0, look: .6, flip: true, head: C.pink, shirt: C.mustard, aL: .12, aR: arr ? .45 : .12 });
+    caption("Some say it's to love, and be loved.", t);
+  },
+  // 3: to learn
+  t => {
+    ground(); grassTufts([90, 1150]);
+    S3I.forEach((it, i) => {
+      const p = eo(prog(t, 1 + i * .3, 1.2)); if (p <= 0) return;
+      const x = lerp(640, it.x, p), y = lerp(480, it.y, p) - Math.sin(p * Math.PI) * 70 + Math.sin(t * 2 + i) * 6 * p;
+      P(x, y, Math.sin(t * 1.5 + i) * .12, lerp(.3, 1, p), () => {
+        if (it.k === 'star') icStar();
+        else if (it.k === 'star2') P(0, 0, .3, .7, () => icStar(C.pink));
+        else if (it.k === 'planet') {
+          rough(ell(0, 0, 62, 16, 22, Math.PI, TAU), { w: 4, col: C.mustard });
+          paper(torn('pl', () => tornPoly(circPts(34, 24), 93, 1.3, 6)), C.teal);
+          rough(ell(0, 0, 62, 16, 22, 0, Math.PI), { w: 4, col: C.mustard });
+        } else textScrap(it.s, 'l' + it.s);
+      });
+    });
+    P(640, 525, 0, back(prog(t, .3, .45)), () => P(0, 0, 0, 3.4, icBook));
+    const bulb = t > 4.2;
+    pip(230, 600, 1.1, { t, look: .6, aL: bulb ? .8 : .12, aR: bulb ? .8 : .3, mouth: bulb ? 'o' : 'smile' });
+    const bp = back(prog(t, 4.2, .35));
+    P(232, 330, 0, bp, () => {
+      for (let k = 0; k < 7; k++) { const a = -Math.PI + k / 6 * Math.PI; rough(seg(Math.cos(a) * 36, Math.sin(a) * 36, Math.cos(a) * 54, Math.sin(a) * 54, 2), { w: 3, col: '#d88f10' }); }
+      paper(torn('bulb', () => tornPoly(circPts(26, 20), 94, 1, 5)), '#ffe08a');
+      paper(torn('bulbb', () => tornPoly(R(0, 30, 22, 16), 95, .8, 4)), '#9a9aa6');
+    });
+    caption("Some say it's to learn, and to wonder.", t);
+  },
+  // 4: to help
+  t => {
+    paper(torn('hill4', () => tornPoly([[20, 720], [20, 612], [300, 592], [640, 580], [980, 592], [1260, 606], [1260, 720]], 301, 3, 10)), C.grass);
+    const g = eo(prog(t, 1, 2.2)), top = 590 - 260 * g;
+    rough([[650, 590], [646, lerp(590, top, .33)], [654, lerp(590, top, .66)], [648, top]], { w: 10, col: C.brown, wob: 1 });
+    [[.3, -1], [.5, 1], [.7, -1]].forEach(([h, side], i) => {
+      const lp = back(prog(g, h, .15)); if (lp <= 0) return;
+      P(650, 590 - 260 * h, side < 0 ? Math.PI + .5 : -.5, lp, () => paper(torn('sl' + i, () => tornPoly(leafPts(46, 14), 310 + i, .8, 5)), C.leaf));
+    });
+    S4CROWN.forEach(([x, y, r, col, st], i) => P(x, y, 0, back(prog(t, st, .35)), () => paper(torn('cr' + i, () => tornPoly(circPts(r, 30), 320 + i, 2, 8)), col)));
+    S4FRUIT.forEach(([x, y], i) => dot(x, y, 9 * back(prog(t, 3.8 + i * .15, .25)), C.tomato));
+    const bp = eio(prog(t, 4.2, 1));
+    if (t > 4.2) bird(lerp(1320, 700, bp), lerp(140, 222, bp) - Math.sin(bp * Math.PI) * 50, bp < 1 ? t * 26 : 0, .9);
+    const px = 330, py = 592, ps = 1.1, aR = .35;
+    const pour = t > .7 && t < 3.4;
+    pip(px, py, ps, { t, look: .6, aR, aL: t > 5 ? .9 + .1 * Math.sin(t * 12) : .12 });
+    const [hx, hy] = pipHand(px, py, ps, aR);
+    P(hx + 26, hy - 6, pour ? -.35 + Math.sin(t * 3) * .05 : -.1, 1, () => {
+      rough([[-34, -12], [-44, -30], [-20, -34], [-14, -16]], { w: 3.5 });
+      paper(torn('can', () => tornPoly(R(0, 0, 66, 46), 330, 1.2, 5)), '#9fb7c9');
+      rough(seg(30, -6, 62, -30, 3), { w: 7, col: '#7d97aa' });
+    });
+    if (pour) for (let k = 0; k < 6; k++) {
+      const u = ((t * 1.4 + k / 6) % 1);
+      dot(lerp(hx + 90, 640, u), lerp(hy - 36, 585, u) - Math.sin(u * Math.PI) * 30, 4.5, C.teal);
+    }
+    caption("Some say it's to help something grow.", t);
+  },
+  // 5: to notice
+  t => {
+    P(1030, 180, 0, back(prog(t, .2, .5)) * 2.1, () => icSun(t * .25));
+    [[300, 150, 110, 40, 1], [760, 110, 80, 30, 2], [1150, 330, 90, 34, 3]].forEach(([x, y, w, h, s]) =>
+      P(x - t * 16 * s * .6, y, 0, 1, () => paper(torn('cl' + s, () => tornPoly(cloudPts(w, h, s * 17), 340 + s, 1.8, 8)), '#ffffff')));
+    paper(torn('hill5', () => tornPoly([[20, 720], [20, 590], [250, 572], [520, 590], [860, 596], [1260, 580], [1260, 720]], 350, 3, 10)), C.grass);
+    S5FL.forEach(([x, y, h, col], i) => flower(x, y, h, prog(t, 1 + i * .4, .8), col, i + 1));
+    pip(400, 548, 1.1, { t: t + .5, rot: -Math.PI / 2, look: -.3, aL: .1, aR: .9 });
+    const u = eio(prog(t, .5, 4.7));
+    butterfly(lerp(1150, 250, u) + Math.sin(u * 9) * 40, lerp(380, 468, u) + Math.sin(u * 14) * 30 * (1 - u) - Math.sin(u * Math.PI) * 120, t * (u < 1 ? 16 : 4), .9);
+    caption("Some say it's just to notice.", t);
+  },
+  // 6: maybe not one thing
+  t => {
+    const T6 = t;
+    cx.save(); cx.setLineDash([6, 12]);
+    rough(ell(640, 320, lerp(430, 250, eo(T6 / 6)), lerp(430, 250, eo(T6 / 6)) * .5, 40), { w: 2, col: 'rgba(107,98,112,.5)', passes: 1 });
+    cx.restore();
+    const items = ICONS.map((fn, i) => ({ fn, i, pos: orbitPos(i, T6) }));
+    const drawIt = it => P(it.pos[0], it.pos[1], Math.sin(t + it.i) * .15, .85 * back(prog(t, .2 + it.i * .18, .4)), () => it.fn(t));
+    items.filter(it => it.pos[2] < 0).forEach(drawIt);
+    const op = eo(prog(t, .5, 1.5));
+    pip(640, 600, 1.2, { t, look: 0, aL: lerp(.15, .7, op), aR: lerp(.15, .7, op), mouth: t > 2 && t < 3 ? 'o' : 'smile' });
+    items.filter(it => it.pos[2] >= 0).forEach(drawIt);
+    caption("Maybe it isn't just one thing.", t);
+  },
+  // 7: yours to make
+  t => {
+    P(640, 296, 0, back(prog(t, 1.2, .5)), () => paper(torn('hbg', () => tornPoly(heartPts(9.2), 400, 2.5, 9)), '#fbd3da'));
+    for (let j = 0; j < 22; j++) {
+      const u = j / 22 * TAU + .14, [x, y] = heartPos(u), s = back(prog(t, 1.4 + j * .05, .3));
+      const col = [C.tomato, C.mustard, C.teal, C.sky, C.pink, C.leaf, C.lilac][j % 7];
+      P(x, y, j * 1.7, s, () => paper(torn('cf' + j, () => {
+        const r = mulberry(500 + j), sz = 22 + r() * 14, k = j % 3;
+        return tornPoly(k === 0 ? R(0, 0, sz, sz * .8) : k === 1 ? circPts(sz * .55, 14) : [[-sz / 2, sz / 2], [0, -sz / 2], [sz / 2, sz / 2]], 510 + j, 1, 5);
+      }), col));
+    }
+    const m = eio(prog(t, .2, 1.6));
+    ICONS.forEach((fn, i) => {
+      const [ox, oy] = orbitPos(i, 6 + t), [hx, hy] = heartPos(HEART_AT[i]);
+      P(lerp(ox, hx, m), lerp(oy, hy, m), Math.sin(t + i) * .15 * (1 - m) + (i - 2.5) * .06 * m, lerp(.85, .62, m), () => fn(t));
+    });
+    ransom(RS.d, t);
+    rough(seg(400, 588, 850, 584, 12), { w: 5, col: C.tomato, p: prog(t, 4.6, .6) });
+    pip(1110, 610, .95, { t, look: -.5, aR: t > 3 ? .85 + .15 * Math.sin(t * 11) : .15, aL: .12 });
+    caption("Maybe it's something you make, piece by piece.", t, .3);
+  }
+];
+const SHEETC = ['#f7f0e1', '#eaf3ee', '#fbe9e6', '#e9eef8', '#eef4df', '#e3eff4', '#f4ebf6', '#fbf3e2'];
+const SROT = [-.006, .008, -.01, .006, -.008, .01, -.005, .004];
+
+function drawScene(i, t) {
+  P(640, 360, SROT[i], 1, () => {
+    cx.translate(-640, -360);
+    const pts = torn('sheet' + i, () => tornPoly(R(640, 360, 1224, 668), 100 + i, 2.6, 9));
+    paper(pts, SHEETC[i]);
+    cx.save(); poly(pts); cx.clip(); SC[i](t); cx.restore();
+    tape(58, 40, 120, -.7); tape(1222, 40, 120, .7);
+  });
+}
+function drawDesk() {
+  cx.fillStyle = '#b98b5b'; cx.fillRect(0, 0, W, H);
+  cx.save(); cx.globalAlpha = .5; cx.globalCompositeOperation = 'multiply'; cx.fillStyle = grainPat; cx.fillRect(0, 0, W, H); cx.restore();
+}
+function render(T) {
+  T = clamp(T, 0, DUR);
+  boil = Math.floor(T * 8); jc = 0;
+  cx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+  drawDesk();
+  const i = Math.min(7, Math.floor(T / SCENE)), lt = T - i * SCENE;
+  const s = i > 0 ? eio(prog(lt, 0, .75)) : 1;
+  if (s < 1) drawScene(i - 1, lt + SCENE);
+  cx.save();
+  if (s < 1) { cx.translate((1 - s) * 1400, -(1 - s) * 60); cx.rotate((1 - s) * .12); }
+  drawScene(i, lt);
+  cx.restore();
+}
+
+/* ---------- audio: all synthesized with Web Audio ---------- */
+let AC = null, MASTER = null, WET = null, NOISE = null, t0 = 0;
+function audioInit() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return false;
+  AC = new Ctx();
+  MASTER = AC.createGain(); MASTER.gain.value = muted ? 0 : .85;
+  const comp = AC.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 3;
+  MASTER.connect(comp); comp.connect(AC.destination);
+  const conv = AC.createConvolver(), len = AC.sampleRate * 2.6 | 0, ib = AC.createBuffer(2, len, AC.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = ib.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8); }
+  conv.buffer = ib; WET = AC.createGain(); WET.gain.value = .32; WET.connect(conv); conv.connect(MASTER);
+  NOISE = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+  const nd = NOISE.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  return true;
+}
+const mtof = n => 440 * Math.pow(2, (n - 69) / 12);
+function route(node, rev = .4) { node.connect(MASTER); if (rev) { const g = AC.createGain(); g.gain.value = rev; node.connect(g); g.connect(WET); } }
+function env(w, peak, att, dec) { const g = AC.createGain(); g.gain.setValueAtTime(.0001, w); g.gain.exponentialRampToValueAtTime(peak, w + att); g.gain.exponentialRampToValueAtTime(.0001, w + att + dec); return g; }
+function osc(type, f, w, end, dest) { const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, w); o.connect(dest); o.start(w); o.stop(end); return o; }
+function noiseSrc(w, dur, dest) { const s = AC.createBufferSource(); s.buffer = NOISE; s.connect(dest); s.start(w, Math.random() * (1.9 - dur)); s.stop(w + dur); }
+const SND = {
+  pluck(w, f, v = .14) {
+    const g = env(w, v, .006, 1.3); route(g, .45); osc('sine', f, w, w + 1.4, g);
+    const g2 = env(w, v * .35, .004, .35); route(g2, .3); osc('triangle', f * 2, w, w + .4, g2);
+    const g3 = env(w, v * .1, .002, .18); g3.connect(MASTER); osc('sine', f * 4.2, w, w + .2, g3);
+  },
+  pad(w, fs, dur) {
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(650, w); lp.frequency.linearRampToValueAtTime(1100, w + dur / 2); lp.frequency.linearRampToValueAtTime(650, w + dur);
+    const g = AC.createGain(); g.gain.setValueAtTime(0, w); g.gain.linearRampToValueAtTime(.018, w + .5);
+    g.gain.setValueAtTime(.018, w + dur - .3); g.gain.linearRampToValueAtTime(0, w + dur + .6);
+    lp.connect(g); route(g, .6);
+    fs.forEach(f => [-7, 7].forEach(d => { osc('sawtooth', f, w, w + dur + .7, lp).detune.value = d; }));
+  },
+  bass(w, f, v = .2) {
+    const g = env(w, v, .01, 1.1); route(g, .1); osc('sine', f, w, w + 1.2, g);
+    const g2 = env(w, v * .3, .01, .3); g2.connect(MASTER); osc('triangle', f * 2, w, w + .35, g2);
+  },
+  shaker(w, v = .022) {
+    const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7000;
+    const g = env(w, v, .004, .06); hp.connect(g); route(g, 0); noiseSrc(w, .09, hp);
+  },
+  swoosh(w) {
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.3;
+    bp.frequency.setValueAtTime(350, w); bp.frequency.exponentialRampToValueAtTime(2600, w + .45);
+    const g = AC.createGain(); g.gain.setValueAtTime(0, w); g.gain.linearRampToValueAtTime(.24, w + .18); g.gain.linearRampToValueAtTime(0, w + .6);
+    bp.connect(g); route(g, .3); noiseSrc(w, .65, bp);
+  },
+  pop(w, f = 600, v = .12) { const g = env(w, v, .003, .12); route(g, .25); osc('sine', f, w, w + .16, g).frequency.exponentialRampToValueAtTime(f * 1.9, w + .07); },
+  thunk(w, v = .32) {
+    const g = env(w, v, .003, .22); route(g, .15); osc('sine', 170, w, w + .26, g).frequency.exponentialRampToValueAtTime(65, w + .2);
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+    const g2 = env(w, v * .45, .002, .07); lp.connect(g2); route(g2, .1); noiseSrc(w, .08, lp);
+  },
+  chime(w, f, v = .09) {
+    const g = env(w, v, .004, 2.6); route(g, .7); osc('sine', f, w, w + 2.7, g);
+    const g2 = env(w, v * .3, .003, 1.2); route(g2, .7); osc('sine', f * 2.76, w, w + 1.3, g2);
+  },
+  tweet(w) { const g = env(w, .07, .005, .1); route(g, .3); const o = osc('sine', 2300, w, w + .13, g); o.frequency.exponentialRampToValueAtTime(3600, w + .06); o.frequency.exponentialRampToValueAtTime(2800, w + .11); },
+  drip(w, f) { const g = env(w, .09, .003, .14); route(g, .4); osc('sine', f * 1.8, w, w + .17, g).frequency.exponentialRampToValueAtTime(f, w + .05); },
+  scribble(w, dur, v = .07) {
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 2;
+    const g = AC.createGain(); g.gain.setValueAtTime(0, w);
+    for (let tt = w; tt < w + dur; tt += .08 + Math.random() * .05) { g.gain.linearRampToValueAtTime(v * (.3 + Math.random() * .7), tt + .03); g.gain.linearRampToValueAtTime(v * .1, tt + .07); }
+    g.gain.linearRampToValueAtTime(0, w + dur + .05);
+    bp.connect(g); route(g, .1); noiseSrc(w, dur + .1, bp);
+  }
+};
+
+/* the score: 80 bpm, one bar = 3 s, two bars per scene */
+function buildScore() {
+  const ev = [], add = (t, fn) => ev.push({ t, fn });
+  const BAR = 3, E8 = .375;
+  const PROG = ['C', 'Am', 'F', 'G', 'C', 'Em', 'F', 'G', 'Am', 'F', 'C', 'G', 'F', 'G', 'F', 'C'];
+  const PAD = { C: [55, 60, 64], Am: [57, 60, 64], F: [57, 60, 65], G: [55, 59, 62], Em: [55, 59, 64] };
+  const ROOT = { C: 48, Am: 45, F: 41, G: 43, Em: 40 };
+  const MEL = [
+    [76, 0, 79, 0, 84, 0, 83, 79], [81, 0, 0, 76, 0, 0, 72, 0], [77, 0, 81, 0, 84, 0, 81, 0], [79, 0, 83, 0, 86, 0, 0, 0],
+    [88, 0, 84, 0, 79, 0, 84, 0], [83, 0, 79, 0, 76, 0, 79, 83], [84, 81, 77, 81, 84, 0, 86, 0], [86, 0, 83, 0, 79, 81, 83, 0],
+    [84, 0, 81, 0, 76, 0, 81, 84], [86, 0, 84, 0, 81, 0, 77, 0], [79, 0, 84, 0, 88, 0, 86, 84], [83, 0, 79, 0, 0, 0, 74, 0],
+    [77, 0, 81, 0, 84, 0, 0, 0], [83, 0, 86, 0, 91, 0, 0, 0], [84, 0, 81, 0, 77, 0, 76, 0], [76, 0, 79, 0, 84, 0, 0, 0]
+  ];
+  PROG.forEach((ch, b) => {
+    const t = b * BAR, last = b === 15;
+    add(t, w => SND.pad(w, PAD[ch].map(mtof), last ? 4.5 : BAR + .2));
+    add(t, w => SND.bass(w, mtof(ROOT[ch])));
+    if (!last) add(t + 2 * .75, w => SND.bass(w, mtof(ROOT[ch] + 7), .14));
+    MEL[b].forEach((n, e) => {
+      if (!n) return;
+      add(t + e * E8, w => SND.pluck(w, mtof(n), b < 2 ? .12 : .14));
+      if (b >= 4 && b <= 11 && e % 2 === 0) add(t + e * E8, w => SND.pluck(w, mtof(n + 12), .04));
+    });
+    if (b >= 2 && b <= 13) for (let e = 1; e < 8; e += 2) add(t + e * E8, w => SND.shaker(w, e === 3 || e === 7 ? .03 : .018));
+  });
+  add(46.9, w => SND.chime(w, mtof(96), .07));
+  add(47.3, w => SND.chime(w, mtof(91), .05));
+
+  // sound effects synced to the picture
+  Object.values(RS).forEach(sp => {
+    const n = sp.text.replace(/ /g, '').length;
+    for (let i = 0; i < n; i++) add(sp.scene * SCENE + sp.tIn + i * sp.step + .04, w => SND.pop(w, 700 + (i % 5) * 110, .05));
+  });
+  for (let k = 1; k < 8; k++) add(k * SCENE - .05, w => SND.swoosh(w));
+  add(2.6, w => SND.pop(w, 420, .14));
+  add(3.2, w => SND.scribble(w, .85));
+  add(4.18, w => SND.pop(w, 900, .1));
+  S1P.forEach(pc => add(6 + pc.st + .22, w => SND.thunk(w)));
+  [72, 76, 79, 84].forEach((n, i) => add(6 + 3.45 + i * .09, w => SND.pluck(w, mtof(n + 12), .07)));
+  add(12 + 2.42, w => { SND.pop(w, 500, .14); SND.chime(w, mtof(84), .08); SND.chime(w + .12, mtof(88), .06); });
+  for (let k = 0; k < 8; k++) add(12 + 2.9 + k * .32, w => SND.pop(w, [1200, 1350, 1500, 1800][k % 4], .03));
+  add(18.32, w => SND.thunk(w, .2));
+  [79, 81, 84, 86, 88, 91].forEach((n, i) => add(18 + 1.05 + i * .3, w => SND.chime(w, mtof(n), .05)));
+  add(18 + 4.22, w => SND.chime(w, mtof(96), .09));
+  for (let k = 0; k < 7; k++) add(24 + .9 + k * .36, w => SND.drip(w, 900 + (k % 3) * 180));
+  S4CROWN.forEach(c => add(24 + c[4] + .03, w => SND.pop(w, 380, .12)));
+  S4FRUIT.forEach((_, i) => add(24 + 3.82 + i * .15, w => SND.pop(w, 900 + i * 90, .06)));
+  add(24 + 5.25, w => SND.tweet(w)); add(24 + 5.42, w => SND.tweet(w)); add(24 + 5.75, w => SND.tweet(w));
+  S5FL.forEach((_, i) => add(30 + 1 + i * .4 + .6, w => SND.pop(w, 650 + i * 60, .05)));
+  [[30.6, 91], [31.9, 88], [33.1, 93], [34.2, 86], [35.2, 91]].forEach(([t, n]) => add(t, w => SND.chime(w, mtof(n), .035)));
+  for (let i = 0; i < 6; i++) add(36 + .2 + i * .18 + .05, w => SND.pop(w, 500 + i * 80, .1));
+  add(42 + 1.22, w => SND.pop(w, 330, .14));
+  for (let j = 0; j < 22; j++) add(42 + 1.4 + j * .05 + .03, w => SND.pop(w, 1100 + (j % 6) * 90, .025));
+  add(42 + 4.6, w => SND.scribble(w, .55, .06));
+  return ev.sort((a, b) => a.t - b.t);
+}
+const SCORE = buildScore();
+
+/* ---------- playback ---------- */
+const ov = document.getElementById('ov'), big = document.getElementById('big');
+const pp = document.getElementById('pp'), rs = document.getElementById('rs'), mu = document.getElementById('mu');
+const bar = document.getElementById('bar'), fill = document.getElementById('fill'), tm = document.getElementById('tm');
+let state = 'idle', muted = false, posterT = 4.8, frozenT = 0, fallbackStart = 0;
+
+function currentT() {
+  if (state === 'idle') return posterT;
+  if (state === 'ended') return DUR;
+  if (state === 'paused') return frozenT;
+  return AC ? AC.currentTime - t0 : (performance.now() / 1000 - fallbackStart);
+}
+function play(from = 0) {
+  from = clamp(from, 0, DUR - .05);
+  if (AC) { try { AC.close(); } catch (e) {} AC = null; }
+  if (audioInit()) {
+    t0 = AC.currentTime + .1 - from;
+    SCORE.forEach(ev => { if (ev.t >= from - .02) ev.fn(t0 + ev.t); });
+    if (AC.state === 'suspended') AC.resume();
+  } else {
+    fallbackStart = performance.now() / 1000 - from;
+  }
+  state = 'playing'; ov.hidden = true; pp.textContent = 'Pause';
+}
+function pause() {
+  if (state !== 'playing') return;
+  frozenT = currentT(); state = 'paused'; pp.textContent = 'Play';
+  if (AC) AC.suspend();
+}
+function resume() {
+  if (state !== 'paused') return;
+  if (AC) { AC.resume(); }
+  else fallbackStart = performance.now() / 1000 - frozenT;
+  state = 'playing'; pp.textContent = 'Pause';
+}
+function toggle() {
+  if (state === 'idle' || state === 'ended') play(0);
+  else if (state === 'playing') pause();
+  else resume();
+}
+big.addEventListener('click', toggle);
+pp.addEventListener('click', toggle);
+rs.addEventListener('click', () => play(0));
+mu.addEventListener('click', () => {
+  muted = !muted; mu.textContent = muted ? 'Unmute' : 'Mute'; mu.setAttribute('aria-pressed', String(muted));
+  if (MASTER) MASTER.gain.setTargetAtTime(muted ? 0 : .85, AC.currentTime, .05);
+});
+function seekFromEvent(e) { const r = bar.getBoundingClientRect(); play(clamp((e.clientX - r.left) / r.width) * DUR); }
+bar.addEventListener('click', seekFromEvent);
+bar.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); play(clamp(currentT() + (e.key === 'ArrowRight' ? 5 : -5), 0, DUR)); }
+});
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && !/INPUT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) { e.preventDefault(); toggle(); }
+});
+
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+function resize() {
+  const r = cv.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.max(2, Math.round(r.width * d)); cv.height = Math.max(2, Math.round(r.height * d));
+}
+window.addEventListener('resize', resize);
+
+function frame() {
+  let T = currentT();
+  if (state === 'playing' && T >= DUR) {
+    state = 'ended'; T = DUR; pp.textContent = 'Play';
+    big.innerHTML = '&#8635; Watch again'; ov.hidden = false;
+  }
+  render(T);
+  const shown = state === 'idle' ? 0 : clamp(T, 0, DUR);
+  fill.style.width = (shown / DUR * 100) + '%';
+  tm.textContent = `${fmt(shown)} / ${fmt(DUR)}`;
+  bar.setAttribute('aria-valuenow', String(Math.round(shown)));
+  requestAnimationFrame(frame);
+}
+
+const fontsReady = Promise.all([
+  document.fonts.load('40px "Gochi Hand"'), document.fonts.load('40px "Abril Fatface"'), document.fonts.load('40px "Special Elite"')
+]).catch(() => {});
+Promise.race([fontsReady, new Promise(r => setTimeout(r, 2500))]).then(() => {
+  layoutCache.clear(); cache.clear();
+  makeGrain(); resize(); requestAnimationFrame(frame);
+});
+})();
+</script>
+</body>
+</html>
